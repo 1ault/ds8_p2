@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Centinela IoT · Acceso</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body class="acceso">
+  <main class="tarjeta-acceso">
+    <div class="marca-acceso">
+      <span class="logo">◈</span>
+      <h1>CENTINELA IoT</h1>
+      <p>Panel de seguridad · Parcial #2</p>
+    </div>
+
+    <form method="post" action="/login">
+      <label for="usuario">Usuario</label>
+      <input id="usuario" name="usuario" type="text" autocomplete="username"
+             value="admin" required autofocus>
+
+      <label for="clave">Contraseña</label>
+      <input id="clave" name="clave" type="password"
+             autocomplete="current-password" required>
+
+      <p class="error-login" id="error-login" hidden>
+        Credenciales incorrectas. Inténtalo de nuevo.
+      </p>
+
+      <button type="submit" class="principal">Entrar</button>
+    </form>
+
+    <p class="pie-acceso">
+      El acceso usa una cookie firmada con HMAC; no se guardan contraseñas.
+    </p>
+  </main>
+
+  <script>
+    if (location.search.includes('error=1')) {
+      document.getElementById('error-login').hidden = false;
+    }
+  </script>
+</body>
+</html>

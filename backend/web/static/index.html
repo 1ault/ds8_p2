@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Centinela IoT · Panel de seguridad</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>🛡️</text></svg>">
+</head>
+<body>
+  <header class="barra">
+    <div class="marca">
+      <span class="logo">◈</span>
+      <div>
+        <h1>CENTINELA IoT</h1>
+        <p id="dispositivo">Puerta principal · dev01</p>
+      </div>
+    </div>
+
+    <div class="enlaces">
+      <span class="pildora" id="pildora-mqtt" title="Broker MQTT">MQTT <b>—</b></span>
+      <span class="pildora" id="pildora-nube" title="ThingSpeak">Nube <b>—</b></span>
+      <span class="pildora" id="pildora-sse" title="Canal en vivo">En vivo <b>—</b></span>
+      <span class="reloj" id="reloj">--:--:--</span>
+      <form method="post" action="/logout" class="salir">
+        <button type="submit" title="Cerrar sesión">Salir</button>
+      </form>
+    </div>
+  </header>
+
+  <main class="rejilla">
+    <!-- Columna izquierda: estado y magnitudes -->
+    <section class="columna">
+      <article class="tarjeta estado" id="tarjeta-estado">
+        <div class="estado-fila">
+          <div>
+            <p class="etiqueta">Estado de seguridad</p>
+            <h2 id="estado-nombre">—</h2>
+          </div>
+          <div class="indicador" id="estado-indicador"></div>
+        </div>
+        <div class="estado-detalle">
+          <div>
+            <p class="etiqueta">Cerradura</p>
+            <p id="estado-cerradura">—</p>
+          </div>
+          <div>
+            <p class="etiqueta">Sirena</p>
+            <p id="estado-sirena">—</p>
+          </div>
+          <div>
+            <p class="etiqueta">Alertas</p>
+            <p id="estado-alertas">—</p>
+          </div>
+        </div>
+        <p class="nota" id="estado-nota">Sin datos todavía</p>
+      </article>
+
+      <article class="tarjeta">
+        <p class="etiqueta">Sensores</p>
+        <div class="magnitudes">
+          <div class="magnitud">
+            <span class="icono">🌡️</span>
+            <b id="valor-temp">—</b>
+            <small>°C</small>
+            <p>Temperatura</p>
+          </div>
+          <div class="magnitud">
+            <span class="icono">💧</span>
+            <b id="valor-hum">—</b>
+            <small>%</small>
+            <p>Humedad</p>
+          </div>
+          <div class="magnitud">
+            <span class="icono">☀️</span>
+            <b id="valor-lux">—</b>
+            <small>lx</small>
+            <p>Luminosidad</p>
+          </div>
+          <div class="magnitud">
+            <span class="icono">📏</span>
+            <b id="valor-dist">—</b>
+            <small>cm</small>
+            <p>Distancia</p>
+          </div>
+          <div class="magnitud">
+            <span class="icono">🚶</span>
+            <b id="valor-mov">—</b>
+            <small></small>
+            <p>Movimiento</p>
+          </div>
+          <div class="magnitud">
+            <span class="icono">📶</span>
+            <b id="valor-rssi">—</b>
+            <small>dBm</small>
+            <p>Señal WiFi</p>
+          </div>
+        </div>
+      </article>
+      <article class="tarjeta">
+        <p class="etiqueta">Estado del sistema</p>
+        <div class="lista-datos">
+          <div><span>Broker MQTT</span><b id="sistema-mqtt">—</b></div>
+          <div><span>Nube (ThingSpeak)</span><b id="sistema-nube">—</b></div>
+          <div><span>Comandos pendientes</span><b id="sistema-pendientes">—</b></div>
+          <div><span>Clientes del panel</span><b id="sistema-clientes">—</b></div>
+          <div><span>Versión del backend</span><b id="sistema-version">—</b></div>
+        </div>
+      </article>
+    </section>
+
+    <!-- Columna central: gráfica e historial -->
+    <section class="columna ancha">
+      <article class="tarjeta">
+        <div class="cabecera-tarjeta">
+          <p class="etiqueta">Histórico de sensores</p>
+          <div class="selector">
+            <button data-horas="1" class="activo">1 h</button>
+            <button data-horas="6">6 h</button>
+            <button data-horas="24">24 h</button>
+          </div>
+        </div>
+        <canvas id="grafica" height="240"></canvas>
+        <div class="leyenda">
+          <span class="clave temp">Temperatura (°C)</span>
+          <span class="clave hum">Humedad (%)</span>
+          <span class="clave dist">Distancia (cm)</span>
+          <span class="muestras" id="muestras">—</span>
+        </div>
+      </article>
+
+      <article class="tarjeta">
+        <div class="cabecera-tarjeta">
+          <p class="etiqueta">Eventos del sistema</p>
+          <span class="contador" id="eventos-total">0</span>
+        </div>
+        <ul class="lista-eventos" id="lista-eventos">
+          <li class="vacio">Sin eventos registrados</li>
+        </ul>
+      </article>
+    </section>
+
+    <!-- Columna derecha: control y comandos -->
+    <section class="columna">
+      <article class="tarjeta">
+        <p class="etiqueta">Control remoto</p>
+        <div class="controles">
+          <button class="accion armar" data-comando="arm">Armar</button>
+          <button class="accion desarmar" data-comando="disarm">Desarmar</button>
+          <button class="accion silenciar" data-comando="mute">Silenciar</button>
+          <button class="accion abrir" data-comando="unlock">Abrir cerradura</button>
+        </div>
+        <p class="nota">Los comandos se auditan y se confirman con ACK del nodo.</p>
+      </article>
+
+      <article class="tarjeta">
+        <div class="cabecera-tarjeta">
+          <p class="etiqueta">Últimos comandos</p>
+          <span class="contador" id="comandos-total">0</span>
+        </div>
+        <table class="tabla">
+          <thead>
+            <tr><th>Comando</th><th>Origen</th><th>Estado</th><th>ms</th></tr>
+          </thead>
+          <tbody id="tabla-comandos">
+            <tr><td colspan="4" class="vacio">Sin comandos</td></tr>
+          </tbody>
+        </table>
+      </article>
+
+      <article class="tarjeta mini">
+        <p class="etiqueta">Resumen 24 h</p>
+        <div class="mini-rejilla">
+          <div><b id="stat-lecturas">0</b><p>lecturas</p></div>
+          <div><b id="stat-temp-media">—</b><p>°C media</p></div>
+          <div><b id="stat-alarmas">0</b><p>alarmas</p></div>
+          <div><b id="stat-latencia">—</b><p>ms ACK</p></div>
+        </div>
+      </article>
+    </section>
+  </main>
+
+  <dialog id="dialogo-pin">
+    <form method="dialog" id="form-pin">
+      <h3>Abrir cerradura</h3>
+      <p>Introduce el PIN de seguridad para liberar el pestillo.</p>
+      <input type="password" id="campo-pin" inputmode="numeric" maxlength="8"
+             autocomplete="off" placeholder="••••" required>
+      <div class="dialogo-acciones">
+        <button value="cancelar" class="secundario">Cancelar</button>
+        <button value="aceptar" class="principal">Abrir</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div class="avisos" id="avisos"></div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

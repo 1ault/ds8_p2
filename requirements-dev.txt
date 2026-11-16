@@ -1,0 +1,17 @@
+# =============================================================================
+#  Centinela IoT - dependencias de DESARROLLO
+#
+#  Solo hacen falta para ejecutar las pruebas y para regenerar los diagramas,
+#  las capturas y los paquetes de entrega. El sistema en produccion no las usa.
+#
+#      pip install -r requirements-dev.txt
+#
+#  Versiones probadas en el desarrollo.
+# =============================================================================
+
+# --- Pruebas automatizadas (309 casos) --------------------------------------
+pytest>=8.0
+pytest-asyncio>=0.23
+
+# --- Generacion de diagramas e imagenes del informe ------------------------
+Pillow>=10.0

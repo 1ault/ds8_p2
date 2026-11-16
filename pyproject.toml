@@ -1,0 +1,23 @@
+[project]
+name = "centinela-iot"
+version = "2.0.0"
+description = "Sistema IoT de seguridad con deteccion y alertas (Parcial #2 - Desarrollo de Software VIII)"
+requires-python = ">=3.10"
+dependencies = [
+    "aiohttp>=3.9",
+    "paho-mqtt>=2.0",
+    "python-dotenv>=1.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "pytest-asyncio>=0.23", "Pillow>=10.0"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+addopts = "-ra"
+filterwarnings = ["ignore::DeprecationWarning"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"

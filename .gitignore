@@ -1,0 +1,36 @@
+# ------------------------------ entorno ------------------------------------
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.tmp/
+tmp/
+tests/.scratch/
+
+# --------------------------- datos y secretos -------------------------------
+.env
+data/*.db
+data/*.db-wal
+data/*.db-shm
+data/*.sqlite
+
+# --------------------------- binarios y paquetes ----------------------------
+*.bin
+entregables/
+preview-*/
+tmpvpo5i1zu/
+
+# ------------------------------ sistema -------------------------------------
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# ------------------------------ editores ------------------------------------
+.vscode/
+.idea/
+~$*

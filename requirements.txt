@@ -1,0 +1,24 @@
+# =============================================================================
+#  Centinela IoT - dependencias del BACKEND (Python 3.10 o superior)
+#
+#  Instalacion:
+#      python -m venv .venv
+#      .venv\Scripts\activate            (Windows)
+#      pip install -r requirements.txt
+#
+#  El firmware del ESP32 (carpeta firmware/) NO usa estas librerias: funciona
+#  con MicroPython puro (machine, network, asyncio, framebuf, json).
+#  Aqui solo se declara lo que ejecuta el computador que hace de servidor.
+#
+#  Versiones probadas en el desarrollo: Python 3.15.2 / Windows 11.
+# =============================================================================
+
+# --- Servidor web asincrono: API REST, panel y SSE ---------------------------
+aiohttp>=3.9,<4
+
+# --- Comunicacion con el broker MQTT (nucleo del proyecto) -------------------
+paho-mqtt>=2.0,<3
+
+# --- Lectura opcional del archivo .env --------------------------------------
+#     El backend tiene un lector propio de respaldo si esta libreria falta.
+python-dotenv>=1.0
