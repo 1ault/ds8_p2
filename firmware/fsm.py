@@ -164,6 +164,7 @@ class SecurityFSM:
             return efectos
 
         if cmd == "mute":
+            # Silencia esta alarma; una alerta nueva vuelve a sonar.
             if self.estado == ALARMA:
                 self.silenciada = True
                 if self.sonando:
@@ -223,10 +224,11 @@ class SecurityFSM:
         self.ultimo_motivo = motivo
         efectos = [_fx(FX_ALERTA, motivo=motivo, cm=distancia)]
 
-        if not self.silenciada:
-            self.sonando = True
-            self._fin_sirena = ahora + self.sirena_max_s
-            efectos.append(_fx(FX_SIRENA_ON))
+        # Una alerta nueva vuelve a sonar aunque la anterior se haya silenciado.
+        self.silenciada = False
+        self.sonando = True
+        self._fin_sirena = ahora + self.sirena_max_s
+        efectos.append(_fx(FX_SIRENA_ON))
 
         return efectos
 
@@ -248,10 +250,11 @@ class SecurityFSM:
         self.estado = ALARMA
         self.ultimo_motivo = "sobrecalentamiento"
         efectos = [_fx(FX_ALERTA, motivo="sobrecalentamiento", c=celsius)]
-        if not self.silenciada:
-            self.sonando = True
-            self._fin_sirena = ahora + self.sirena_max_s
-            efectos.append(_fx(FX_SIRENA_ON))
+        # Una alerta nueva vuelve a sonar aunque la anterior se haya silenciado.
+        self.silenciada = False
+        self.sonando = True
+        self._fin_sirena = ahora + self.sirena_max_s
+        efectos.append(_fx(FX_SIRENA_ON))
         return efectos
 
 

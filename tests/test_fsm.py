@@ -213,13 +213,14 @@ class TestSirena:
         assert maquina.handle(T0, {"type": "command", "cmd": "mute"}) == []
         assert maquina.silenciada is False
 
-    def test_alarma_silenciada_no_vuelve_a_sonar(self):
+    def test_alarma_silenciada_vuelve_a_sonar_con_nueva_alerta(self):
         maquina = crear(cooldown_alerta_s=5)
         instante = armar_del_todo(maquina)
         maquina.handle(instante, {"type": "presence"})
         maquina.handle(instante + 1, {"type": "command", "cmd": "mute"})
         maquina.handle(instante + 6, {"type": "presence"})
-        assert maquina.sonando is False
+        assert maquina.silenciada is False
+        assert maquina.sonando is True
         assert maquina.alertas == 2
 
 
