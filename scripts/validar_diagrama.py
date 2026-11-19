@@ -64,7 +64,7 @@ def revisar(nombre: str, datos: dict) -> list[str]:
 def revisar_geometria(original: dict, variante: dict) -> list[str]:
     """Comprueba que cada placa cubre su grupo de componentes.
 
-    Usa la geometria **medida** en el simulador (proyecto 480692575433146369):
+    Usa la geometria **medida** en el simulador (proyecto 480810097290000385):
     la placa de 830 puntos mide 654x208 px sin girar, `rotate: 90` la gira
     alrededor de su centro, y la caja dibujada queda en (left + 223, top - 223).
     Las cajas reales de los componentes se midieron igual y se guardan aqui.

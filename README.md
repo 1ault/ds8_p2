@@ -8,6 +8,7 @@
 Escenario 4: **Sistema de Seguridad — Detección y alertas**
 
 **Repositorio:** <https://github.com/1ault/ds8_p2> · **Release:** <https://github.com/1ault/ds8_p2/releases/latest>
+**Wokwi:** <https://wokwi.com/projects/480810097290000385>
 
 Sistema IoT completo: un nodo **ESP32** programado en **MicroPython** (simulado
 en **Wokwi**) lee cuatro sensores de seguridad, decide con una máquina de
@@ -320,7 +321,7 @@ python scripts\capturar_wokwi.py --url <enlace del proyecto>  :: capturas del si
 Capturas del simulador (proyecto público en Wokwi):
 `docs/capturas/wokwi_01..05_*.png` — circuito, monitor serie y OLED en ARMADO y
 ALARMA, tomadas del proyecto
-<https://wokwi.com/projects/480692575433146369>.
+<https://wokwi.com/projects/480810097290000385>.
 
 ---
 

@@ -26,7 +26,7 @@ for ruta in (str(RAIZ), str(RAIZ / "scripts")):
 
 from capturar_wokwi import Navegador, encontrar_navegador  # noqa: E402
 
-URL = "https://wokwi.com/projects/480692575433146369"
+URL = "https://wokwi.com/projects/480810097290000385"
 
 JS_PARTES = """
 (() => {

@@ -28,7 +28,7 @@ DESTINO = RAIZ / "firmware" / "diagram_placa.json"
 # Placas de pan como base de montaje. Van primero en la lista para que el
 # simulador las dibuje detras de los modulos.
 #
-# Geometria medida en el simulador (proyecto 480692575433146369, Chrome headless
+# Geometria medida en el simulador (proyecto 480810097290000385, Chrome headless
 # leyendo los rectangulos reales de los elementos):
 #
 #   * la placa de 830 puntos mide 654 x 208 px sin girar;

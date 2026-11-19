@@ -75,7 +75,7 @@ python scripts\capturar_wokwi.py --url <enlace del proyecto>
 
 Las tomas del circuito, del monitor serie y del OLED se obtuvieron de forma
 automatizada desde el proyecto público
-<https://wokwi.com/projects/480692575433146369> con
+<https://wokwi.com/projects/480810097290000385> con
 [`scripts/capturar_wokwi.py`](../scripts/capturar_wokwi.py): abre la página en un
 navegador headless, pulsa *Play*, acciona el pulsador, provoca la alarma y
 captura cada estado mediante el protocolo DevTools.
