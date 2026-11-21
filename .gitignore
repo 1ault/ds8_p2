@@ -34,3 +34,10 @@ desktop.ini
 .vscode/
 .idea/
 ~$*
+
+# ------------------------------- zips -------------------------------------- 
+*.zip
+
+# ------------------------ cuaderno de trabajo local --------------------------
+# Notas sueltas del estudiante: puede contener claves, no va al repositorio.
+install.md

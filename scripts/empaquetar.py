@@ -172,7 +172,7 @@ Escenario 4: *Sistema de Seguridad — Detección y alertas* · versión {versio
 | `Documentacion_Extendida_Centinela_IoT.docx` / `.pdf` | módulos con firmas y variables, código y SQL comentados, y análisis de cumplimiento |
 | `Guia_Prueba_Monitoreo.docx` / `.pdf` | pasos para probar la interfaz, ubicar las lecturas y consultar el histórico |
 | `Guia_Instalacion_Montaje.docx` / `.pdf` | instalación desde cero, nodo en Wokwi, montaje físico y nube |
-| `Parcial2_IoT_Seguridad.zip` | repositorio completo: código, SQL, 314 pruebas, documentación, diagramas y capturas |
+| `Parcial2_IoT_Seguridad.zip` | repositorio completo: código, SQL, 324 pruebas, documentación, diagramas y capturas |
 | `Wokwi_Centinela_IoT.zip` | proyecto listo para importar en <https://wokwi.com> |
 | `MANIFIESTO.txt` | tamaño y SHA-256 de cada archivo entregado |
 
@@ -208,7 +208,7 @@ Para el simulador: importar `Wokwi_Centinela_IoT.zip` en Wokwi y pulsar **Play**
 
 | Evidencia | Resultado |
 |-----------|-----------|
-| Pruebas automatizadas | **314 aprobadas**, 0 fallidas (`python -m pytest`) |
+| Pruebas automatizadas | **324 aprobadas**, 0 fallidas (`python -m pytest`) |
 | Integración real | broker HiveMQ: telemetría `ARMING → ARMED → ALARM` con sirena activa |
 | Capturas del panel | `docs/capturas/01..07` |
 | Capturas del simulador | `docs/capturas/wokwi_01..05` |
@@ -218,7 +218,7 @@ Para el simulador: importar `Wokwi_Centinela_IoT.zip` en Wokwi y pulsar **Play**
 
 ## 4. Antes de subir a Teams o GitHub
 
-1. Ejecutar `python -m pytest` y confirmar las 314 pruebas.
+1. Ejecutar `python -m pytest` y confirmar las 324 pruebas.
 2. Comprobar que `.env` y `data/*.db` **no** se incluyen (ya están en `.gitignore`).
 3. Cambiar `WEB_PASSWORD`, `SECRET_KEY` y `UNLOCK_PIN` si el sistema se va a usar fuera del aula.
 4. Tomar las capturas propias de ThingSpeak y del repositorio en GitHub

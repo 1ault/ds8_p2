@@ -22,6 +22,13 @@ emulado en marcha. Ten también abiertas:
 Plan B sin Internet: añadir `--sin-mqtt` al comando anterior. El nodo y el
 backend se comunican en memoria y todo lo demás funciona igual.
 
+### 1.1 Dos clics que hay que recordar en Wokwi
+
+| Sensor | Cómo se acciona | Detalle |
+|--------|-----------------|---------|
+| PIR | clic en el sensor → **Simulate Motion** | deja `OUT` en ALTO 5 s; accionarlo **después** de que el OLED diga `ARMADO` |
+| HC-SR04 | clic en el sensor → deslizador de distancia | arranca en 400 cm; bajar a menos de 80 cm para la alarma de proximidad |
+
 ---
 
 ## 2. Guion de la demostración
@@ -33,7 +40,7 @@ backend se comunican en memoria y todo lo demás funciona igual.
 | 1:30 | Monitor serie del nodo | "Se conecta a Wokwi-GUEST, publica telemetría cada 5 s y escucha comandos" |
 | 2:15 | Panel en DESARMADO | "KPIs, gráfica y eventos en tiempo real por SSE" |
 | 3:00 | Pulsar **Armar** | "Cuenta regresiva de 10 s para salir del área" |
-| 3:30 | Activar el PIR o acercar la mano | "ALARMA: sirena, LED rojo y evento publicado" |
+| 3:30 | Activar el PIR (clic → **Simulate Motion**) | "ALARMA: sirena, LED rojo y evento publicado" |
 | 4:15 | Pulsar **Silenciar** | "Se calla la sirena pero la alerta queda en SQLite" |
 | 4:45 | **Desarmar** y **Abrir cerradura** con PIN | "Comando validado, auditado y confirmado con ACK" |
 | 5:15 | Escribir un PIN erróneo | "Rechazado con motivo; a los 3 intentos se bloquea 30 s" |
@@ -41,7 +48,7 @@ backend se comunican en memoria y todo lo demás funciona igual.
 | 6:15 | `python -m backend.cli comandos` | "Cada comando con su latencia y estado final" |
 | 6:45 | Canal de ThingSpeak | "Los mismos datos en la nube, 8 campos con gráficas" |
 | 7:15 | TalkBack con `arm` | "Comando desde la nube hacia el dispositivo" |
-| 7:45 | `python -m pytest` | "314 pruebas automatizadas de firmware y backend" |
+| 7:45 | `python -m pytest` | "324 pruebas automatizadas de firmware y backend" |
 | 8:30 | Código | "FSM pura, HAL aislado, cliente MQTT propio, tareas asíncronas" |
 
 Consejo: si el WiFi del aula falla, continuar con `--sin-mqtt`; los datos ya
@@ -113,7 +120,7 @@ secuencia `ARMING → ARMED → ALARM` con `siren: true` y `alerts: 1`.
 | ¿Qué pasa si se cae el WiFi? | Reintentos con backoff y LWT `offline`; al volver se resuscribe solo. |
 | ¿Por qué SSE y no WebSocket? | Un solo sentido, reconexión nativa del navegador y cero dependencias. |
 | ¿Es seguro abrir la cerradura por MQTT? | Requiere PIN, solo en DESARMED, se audita y se cierra sola a los 8 s. |
-| ¿Cómo probaron el firmware sin hardware? | Dobles de `machine` y un broker MQTT falso sobre TCP: 314 pruebas en CPython. |
+| ¿Cómo probaron el firmware sin hardware? | Dobles de `machine` y un broker MQTT falso sobre TCP: 324 pruebas en CPython. |
 | ¿Por qué el nodo no manda la hora? | No tiene RTC ni NTP; el servidor sella cada lectura para que el histórico no se rompa al reiniciar. |
 | ¿Cuánto almacena? | Una lectura cada 5 s ≈ 17 000 al día, ~1,5 MB al mes; se purga a los 30 días. |
 | ¿Qué pasa con dos dispositivos? | El prefijo incluye `device_id` y el backend escucha `centinela/+/#`. |

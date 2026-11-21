@@ -151,7 +151,7 @@ def construir() -> Path:
   firmware/    12 modulos MicroPython + diagram.json + diagram_placa.json
   sql/         schema.sql, seed.sql, consultas.sql
   scripts/     demo, capturas, informes y empaquetado
-  tests/       314 pruebas automatizadas
+  tests/       324 pruebas automatizadas
   docs/        documentacion, diagramas y capturas
   entregables/ documentos y paquetes finales
   requirements.txt  .env.example  README.md""")
@@ -192,7 +192,7 @@ pip list""")
         pie="Dependencias que instala el paso anterior.",
     )
     manual.parrafo("De forma opcional puedes instalar las de desarrollo (`pytest`, "
-                   "`pytest-asyncio`, `Pillow`) y ejecutar las **314 pruebas** para "
+                   "`pytest-asyncio`, `Pillow`) y ejecutar las **324 pruebas** para "
                    "confirmar que todo está sano:")
     manual.codigo("""pip install -r requirements-dev.txt
 python -m pytest""")
@@ -536,7 +536,7 @@ systemctl status centinela""")
         ["#", "Comprobación", "Dónde", "Esperado"],
         [
             ["1", "dependencias instaladas", "consola", "`import aiohttp, paho.mqtt` sin error"],
-            ["2", "pruebas automatizadas", "consola", "314 aprobadas"],
+            ["2", "pruebas automatizadas", "consola", "324 aprobadas"],
             ["3", "base de datos creada", "`data/`", "existe `centinela.db`"],
             ["4", "servidor en marcha", "consola", "panel en `http://127.0.0.1:8000`"],
             ["5", "acceso al panel", "navegador", "entra con usuario y contraseña"],

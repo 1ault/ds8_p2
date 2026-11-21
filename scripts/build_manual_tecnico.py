@@ -86,7 +86,7 @@ def construir() -> Path:
             ["Tópicos MQTT", "6 (telemetría, eventos, estado, comando, ACK y configuración)"],
             ["Base de datos", "5 tablas, 5 vistas y 7 índices en SQLite"],
             ["Consultas de históricos", "12 documentadas en `sql/consultas.sql`"],
-            ["Pruebas automatizadas", "314 casos con pytest"],
+            ["Pruebas automatizadas", "324 casos con pytest"],
             ["Documentación", "este manual, el manual de usuario y 7 documentos técnicos"],
         ],
         anchos=[5.0, 11.6],
@@ -507,7 +507,7 @@ def construir() -> Path:
         [
             ["DHT22", "5 s", "hasta 3 reintentos, mediana de 3, rangos −20…80 °C y 0…100 %"],
             ["PIR", "150 ms", "antirrebote con retención de 1,5 s"],
-            ["HC-SR04", "500 ms", "mediana de 3 disparos, descarta ecos fuera de 2–350 cm"],
+            ["HC-SR04", "500 ms", "mediana de 3 disparos, descarta ecos fuera de 2–400 cm"],
             ["LDR", "1 s", "conversión de ADC a lux con el modelo del módulo"],
         ],
         anchos=[3.0, 2.4, 11.2],
@@ -821,7 +821,7 @@ duty_u16 = int(ancho_us / 20000 * 65535)"""
             ["`field1`", "temperatura (°C)", "−20 … 80"],
             ["`field2`", "humedad (%)", "0 … 100"],
             ["`field3`", "luminosidad (lux)", "0 … 100 000"],
-            ["`field4`", "distancia (cm)", "2 … 350"],
+            ["`field4`", "distancia (cm)", "2 … 400"],
             ["`field5`", "movimiento", "0 / 1"],
             ["`field6`", "alarma", "0 / 1"],
             ["`field7`", "estado (código)", "0 … 3"],
@@ -1099,7 +1099,7 @@ WantedBy=multi-user.target"""
     manual.h1("11. Pruebas y calidad")
 
     manual.h2("11.1 Estrategia")
-    manual.parrafo("Las 314 pruebas se ejecutan en CPython sin placas ni simulador. El "
+    manual.parrafo("Las 324 pruebas se ejecutan en CPython sin placas ni simulador. El "
                    "firmware se prueba con dobles de `machine`, `dht`, `framebuf` y "
                    "`network`; el cliente MQTT se enfrenta a un broker falso que habla TCP "
                    "real; el backend usa SQLite real y el servidor aiohttp de pruebas.")
@@ -1121,12 +1121,12 @@ WantedBy=multi-user.target"""
         ],
         anchos=[4.2, 1.6, 10.8],
         alinear_centro=(1,),
-        pie="Distribución de las 314 pruebas automatizadas.",
+        pie="Distribución de las 324 pruebas automatizadas.",
     )
 
     manual.h2("11.2 Cómo ejecutarlas")
     manual.codigo(
-        """python -m pytest              # 314 pruebas, ~50 s
+        """python -m pytest              # 324 pruebas, ~50 s
 python -m pytest tests/test_fsm.py -q
 python -m pytest -k "alarma" -v"""
     )
@@ -1236,7 +1236,7 @@ sqlite3 data/centinela.db "VACUUM;\""""
   backend/web/    app.py, auth.py y estaticos del panel
   sql/            schema.sql, seed.sql, consultas.sql
   scripts/        demo, emulador, diagramas, capturas, empaquetado
-  tests/          314 pruebas y dobles de hardware
+  tests/          324 pruebas y dobles de hardware
   docs/           manuales, diagramas (img) y capturas
   entregables/    ZIP de Wokwi, ZIP del proyecto y manifiesto"""
     )

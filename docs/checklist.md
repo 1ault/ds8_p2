@@ -77,7 +77,7 @@ Leyenda: ✅ incluido · ⏳ requiere un paso del estudiante · ⚠️ requiere 
 
 | Evidencia | Archivo |
 |-----------|---------|
-| 314 pruebas automatizadas | `docs/capturas/` y salida de `python -m pytest` |
+| 324 pruebas automatizadas | `docs/capturas/` y salida de `python -m pytest` |
 | Panel en operación | `docs/capturas/01_panel_estado.png` |
 | Alarma en curso | `docs/capturas/02_panel_alarma.png` |
 | Acceso al panel | `docs/capturas/03_login.png` |
@@ -90,7 +90,7 @@ Leyenda: ✅ incluido · ⏳ requiere un paso del estudiante · ⚠️ requiere 
 
 ## 5. Antes de entregar
 
-1. `python -m pytest` → 314 aprobadas.
+1. `python -m pytest` → 324 aprobadas.
 2. `python scripts\demo.py --reset --sembrar` → panel con datos y alarma.
 3. Importar el ZIP en Wokwi y comprobar que conecta.
 4. Completar `.env` con las claves de ThingSpeak y ver una subida.

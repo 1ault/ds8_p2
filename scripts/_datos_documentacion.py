@@ -638,7 +638,7 @@ DETECCION = [
      "alcance tipico 5-7 m con 100 grados de apertura; retencion de 1,5 s en el firmware",
      "alarma si el sistema esta ARMADO"),
     ("HC-SR04", "distancia por ultrasonido", "<= 80 cm (umbral configurable)",
-     "2 a 350 cm utiles; el firmware toma la mediana de tres disparos",
+     "2 a 400 cm utiles; el firmware toma la mediana de tres disparos",
      "alarma por presencia cercana si esta ARMADO"),
     ("DHT22", "temperatura", ">= 45 grados centigrados",
      "un solo punto junto al nodo", "alarma por sobrecalentamiento si esta ARMADO; aviso si no"),

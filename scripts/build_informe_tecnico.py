@@ -68,7 +68,7 @@ def construir() -> Path:
                    "automatizadas. El protocolo MQTT se implementó desde cero sobre asyncio, "
                    "porque no existen clientes disponibles para MicroPython en el entorno "
                    "simulado.")
-    manual.parrafo("El sistema se validó con **314 pruebas automatizadas** (todas "
+    manual.parrafo("El sistema se validó con **324 pruebas automatizadas** (todas "
                    "aprobadas), una demostración de extremo a extremo con broker real y una "
                    "captura automatizada del simulador. La telemetría real confirmó la "
                    "secuencia de estados `ARMING → ARMED → ALARM` con sirena activa. El "
@@ -83,7 +83,7 @@ def construir() -> Path:
         ("Escenario", "4 — sistema de seguridad con detección y alertas"),
         ("Alcance", "dispositivo, transporte, servicios, panel, nube y documentación"),
         ("Tecnologías", "ESP32 y MicroPython, MQTT, Python con aiohttp, SQLite, ThingSpeak"),
-        ("Verificación", "314 pruebas automatizadas, demostración de extremo a extremo y "
+        ("Verificación", "324 pruebas automatizadas, demostración de extremo a extremo y "
                          "capturas del simulador"),
         ("Entregables", "este informe, manual técnico, manual del usuario, paquete del "
                         "proyecto y proyecto de Wokwi"),
@@ -240,7 +240,7 @@ def construir() -> Path:
             ["paho-mqtt", "cliente MQTT del backend, adaptado a asyncio"],
             ["SQLite", "histórico, eventos, comandos y transiciones"],
             ["ThingSpeak", "canal de ocho campos y cola de comandos TalkBack"],
-            ["pytest + pytest-asyncio", "314 pruebas automatizadas"],
+            ["pytest + pytest-asyncio", "324 pruebas automatizadas"],
             ["Pillow", "generación de diagramas y capturas de consola"],
             ["Chrome headless + DevTools", "capturas reales del panel y del simulador"],
         ],
@@ -396,8 +396,8 @@ def construir() -> Path:
     manual.h1("6. Resultados")
 
     manual.h2("6.1 Pruebas automatizadas")
-    manual.parrafo("Se ejecutaron **314 pruebas** en CPython, con un tiempo total de "
-                   "alrededor de un minuto y un resultado de 314 aprobadas y 0 fallidas. La "
+    manual.parrafo("Se ejecutaron **324 pruebas** en CPython, con un tiempo total de "
+                   "alrededor de un minuto y un resultado de 324 aprobadas y 0 fallidas. La "
                    "mayor cantidad de pruebas corresponde al firmware (156) y al protocolo "
                    "MQTT (45), que es donde se concentra el riesgo del sistema.")
     manual.tabla(
@@ -418,7 +418,7 @@ def construir() -> Path:
         ],
         anchos=[4.8, 1.8, 9.8],
         alinear_centro=(1,),
-        pie="Distribución de las 314 pruebas por archivo y nivel.",
+        pie="Distribución de las 324 pruebas por archivo y nivel.",
     )
 
     manual.h2("6.2 Verificación del dispositivo en el simulador")
@@ -571,7 +571,7 @@ def construir() -> Path:
                    "aislada; el cliente MQTT propio cubre QoS 0 y 1 con Last Will y "
                    "reconexión; la base de datos conserva lecturas, eventos y comandos con sus "
                    "doce consultas de históricos; ThingSpeak recibe los datos y entrega "
-                   "comandos; el panel opera en tiempo real con autenticación; y las 314 "
+                   "comandos; el panel opera en tiempo real con autenticación; y las 324 "
                    "pruebas se ejecutan sin fallos.")
     manual.parrafo("La enseñanza principal del proyecto es que **la verificabilidad no se "
                    "improvisa al final**: aislar el hardware en una capa, separar la lógica de "
@@ -587,7 +587,7 @@ def construir() -> Path:
         "verificables, en lugar de condicionales repartidos por el código.",
         "Un esquema de auditoría de comandos que registra origen, resultado y latencia, y que "
         "distingue entre rechazo, error y expiración.",
-        "Un conjunto de 314 pruebas que cubre desde la codificación de paquetes MQTT hasta la "
+        "Un conjunto de 324 pruebas que cubre desde la codificación de paquetes MQTT hasta la "
         "API del panel, ejecutable en un computador sin hardware.",
         "Un proceso reproducible de evidencias: diagramas, capturas del panel y del "
         "simulador, y manifiesto con verificación de integridad.",
@@ -665,7 +665,7 @@ def construir() -> Path:
   backend/        servicios asincronos (10 modulos) y paquete web
   sql/            schema.sql, seed.sql, consultas.sql (12 consultas)
   scripts/        demo, emulador, diagramas, capturas, informes y empaquetado
-  tests/          314 pruebas y dobles de hardware
+  tests/          324 pruebas y dobles de hardware
   docs/           manuales (3 documentos), diagramas (img) y capturas
   entregables/    paquetes ZIP, documentos finales y manifiesto con SHA-256"""
     )
@@ -693,7 +693,7 @@ def construir() -> Path:
 
     manual.h2("Anexo C. Comandos de reproducción")
     manual.codigo(
-        """python -m pytest                          # 314 pruebas
+        """python -m pytest                          # 324 pruebas
 python -m backend.main --seed              # backend + panel
 python scripts\\demo.py --reset --sembrar   # demo completa con nodo emulado
 python scripts\\capturar_dashboard.py        # capturas del panel y de la consola

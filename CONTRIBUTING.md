@@ -29,7 +29,7 @@ python scripts\verificar_diagrama.py firmware\diagram.json
 firmware/   nodo ESP32 + MicroPython + diagram.json
 backend/    servidor aiohttp, MQTT, SQLite, panel y ThingSpeak
 sql/        schema.sql, seed.sql, consultas.sql
-tests/      314 pruebas
+tests/      324 pruebas
 scripts/    demo, empaquetado, verificación y generación de documentos
 docs/       arquitectura, instalación, capturas, diagramas y manuales
 ```

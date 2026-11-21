@@ -102,7 +102,7 @@ Parcial2_IoT_Seguridad/
 │   └── web/                   # API REST, SSE, login y panel
 ├── sql/                       # schema.sql · seed.sql · consultas.sql
 ├── scripts/                   # demo, emulador, diagramas, capturas, empaquetado
-├── tests/                     # 314 pruebas (pytest)
+├── tests/                     # 324 pruebas (pytest)
 ├── docs/                      # documentación, diagramas y capturas
 ├── entregables/               # ZIP de Wokwi, ZIP del proyecto y manifiesto
 ├── requirements.txt           # dependencias del backend
@@ -232,7 +232,7 @@ Con `--sin-mqtt` funciona sin Internet (transporte en memoria).
 python -m pytest
 ```
 
-**314 pruebas aprobadas** (~1 min): firmware con dobles de hardware y backend
+**324 pruebas aprobadas** (~1 min): firmware con dobles de hardware y backend
 contra SQLite real, un broker MQTT falso sobre TCP y el servidor aiohttp.
 
 ---
@@ -334,7 +334,7 @@ Proyecto desarrollado para el **Parcial #2** de *Desarrollo de Software VIII*
   asíncrona con máquina de estados pura.
 - **Backend**: Python 3 con aiohttp, paho-mqtt, SQLite y asyncio.
 - **Nube**: ThingSpeak (canal de 8 campos + TalkBack).
-- **Pruebas**: 314 casos automatizados con pytest.
+- **Pruebas**: 324 casos automatizados con pytest.
 
 > Las capturas del simulador de Wokwi y del canal de ThingSpeak deben tomarlas
 > con su propia cuenta; el guion está en [`docs/guia_demo.md`](docs/guia_demo.md).
