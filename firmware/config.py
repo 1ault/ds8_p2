@@ -35,7 +35,10 @@ MQTT_PORT = const(1883)
 MQTT_TLS = const(False)
 MQTT_USER = const("")
 MQTT_PASSWORD = const("")
-MQTT_CLIENT_ID = const("centinela-dev01")
+# Identificador de cliente MQTT: TIENE que ser unico en el broker. Con el
+# publico broker.hivemq.com, dos nodos con el mismo id se expulsan entre si y
+# el monitor serie repite "fallo de conexion MQTT" en bucle.
+MQTT_CLIENT_ID = const("centinela-ault-dev01")
 MQTT_KEEPALIVE_S = const(30)
 MQTT_RECONNECT_MIN_S = const(2)
 MQTT_RECONNECT_MAX_S = const(60)
@@ -86,13 +89,19 @@ TELEMETRY_PERIOD_S = const(5.0)
 OLED_PERIOD_S = const(0.6)
 STATUS_PERIOD_S = const(30.0)
 BUTTON_DEBOUNCE_MS = const(250)
+# Sondeo del pulsador: 20 ms para no perder un clic corto (la tarea de
+# sensores puede bloquear el bucle hasta 100 ms mientras mide el HC-SR04).
+BUTTON_POLL_S = const(0.02)
+# Cada cuantos segundos el nodo imprime un latido con su estado y el nivel del
+# pulsador: es la forma de ver en el monitor serie que el bucle sigue vivo.
+LATIDO_S = const(10.0)
 
 # ---------------------------------------------------------------------------
 # Umbrales de seguridad
 # ---------------------------------------------------------------------------
 EXIT_DELAY_S = const(10)          # tiempo para salir antes de armar
 DIST_ALARM_CM = const(80.0)       # presencia mas cerca que esto = intrusion
-DIST_MAX_CM = const(350.0)
+DIST_MAX_CM = const(410.0)        # HC-SR04 mide 2-400 cm; 10 cm de margen
 TEMP_ALARM_C = const(45.0)        # alerta de sobrecalentamiento
 TEMP_MIN_VALID_C = const(-20.0)
 TEMP_MAX_VALID_C = const(80.0)
@@ -131,4 +140,4 @@ BUZZER_DUTY = const(512)      # sobre 1023
 
 # Version del contrato de datos publicada en cada mensaje
 PROTOCOL_VERSION = const(1)
-FIRMWARE_VERSION = const("2.0.0")
+FIRMWARE_VERSION = const("2.0.4")

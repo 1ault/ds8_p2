@@ -33,7 +33,7 @@
       "id": "bz1",
       "top": -122.4,
       "left": -276.6,
-      "attrs": { "volume": "0.1" }
+      "attrs": { "volume": "1" }
     },
     {
       "type": "wokwi-led",

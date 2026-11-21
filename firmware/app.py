@@ -19,6 +19,21 @@ _CANCELADO = getattr(asyncio, "CancelledError", ())
 
 COMANDOS_VALIDOS = ("arm", "disarm", "mute", "unlock", "ping", "set_config")
 
+
+def reloj_monotonico():
+    """Reloj del nodo: segundos con resolucion de milisegundos.
+
+    En el ESP32 `time.time()` devuelve segundos **enteros**: con esa
+    resolucion los periodos de muestreo de 0,15 s (PIR) y 0,5 s (HC-SR04) se
+    redondeaban a 1 s, y la cuenta regresiva saltaba de segundo en segundo.
+    `time.ticks_ms()` cuenta milisegundos desde el arranque.
+    """
+    ticks = getattr(time, "ticks_ms", None)
+    if ticks is None:          # CPython sin los dobles de las pruebas
+        return time.time()
+    return ticks() / 1000.0
+
+
 # Rangos aceptados para el cambio de umbrales en caliente
 _LIMITES_CONFIG = {
     "dist_alarm_cm": (10.0, 350.0),
@@ -42,7 +57,7 @@ class Controlador:
         self.pantalla = pantalla
         self.maquina = maquina
         self._log = log or (lambda mensaje: None)
-        self._reloj = reloj or time.time
+        self._reloj = reloj or reloj_monotonico
 
         self.bus = Bus()
         self._buzon = self.bus.suscribir("cmd")
@@ -53,10 +68,13 @@ class Controlador:
         self.iniciado_en = None
         self.ultimo_estado = maquina.estado
         self.ultimo_telemetria = 0.0
+        self._origen_comando = None
 
         self._boton = hal.entrada(cfg.PIN_BUTTON, pull=hal.pull_up()) if boton else None
-        self._boton_prev = 1
+        self._boton_apretado = None      # se adopta en la 1a lectura estable
+        self._nivel_boton = None         # ultimo nivel leido (para la traza)
         self._ms_boton = 0
+        self.latido_s = getattr(cfg, "LATIDO_S", 10.0)
         self._ms_led = 0
         self._ms_sirena = 0
         self._fase_sirena = False
@@ -64,6 +82,11 @@ class Controlador:
         self._led_verde_on = False
         self._movimiento_prev = False
         self._distancia_dentro = False
+        # Presencia detectada que la FSM todavia no puede atender (cuenta
+        # regresiva de salida); se resuelve al quedar ARMADO.
+        self._presencia_pendiente = False
+        self._pendiente_motivo = "movimiento"
+        self._pendiente_cm = None
 
     # -- utilidades --------------------------------------------------------
     def _ahora(self):
@@ -140,6 +163,7 @@ class Controlador:
                 self.panel.buzzer.encender(self.cfg.SIREN_FREQ_LOW)
                 motivo = fx.get("motivo")
                 texto = "Sirena activada" + (" (%s)" % motivo if motivo else "")
+                self._log(texto)
                 await self._evento("alarm", "critical", texto,
                                    {"reason": motivo})
 
@@ -147,16 +171,20 @@ class Controlador:
                 self.panel.buzzer.apagar()
                 motivo = fx.get("motivo")
                 texto = "Sirena silenciada" + (" (%s)" % motivo if motivo else "")
+                self._log(texto)
                 await self._evento("alarm_off", "warning", texto)
 
             elif clase == fsm_mod.FX_ABRIR:
                 self.panel.cerradura.abrir()
+                self._log("cerradura abierta (se cierra sola en %ss)"
+                          % fx.get("auto_cierre_s"))
                 await self._evento("unlock", "warning",
                                    "Cerradura abierta",
                                    {"auto_relock_s": fx.get("auto_cierre_s")})
 
             elif clase == fsm_mod.FX_CERRAR:
                 self.panel.cerradura.cerrar()
+                self._log("cerradura cerrada (%s)" % fx.get("motivo"))
                 await self._evento("lock", "info", "Cerradura cerrada",
                                    {"reason": fx.get("motivo")})
 
@@ -173,6 +201,8 @@ class Controlador:
                                     "c": fx.get("c")})
 
             elif clase == fsm_mod.FX_RECHAZO:
+                self._log("comando rechazado: %s (%s)"
+                          % (fx.get("cmd"), fx.get("motivo")))
                 await self._evento("command_rejected", "warning",
                                    "Comando rechazado: %s" % fx.get("motivo", ""),
                                    {"cmd": fx.get("cmd"),
@@ -183,36 +213,68 @@ class Controlador:
             return
         anterior = self.ultimo_estado
         self.ultimo_estado = self.maquina.estado
+        self._log("estado %s -> %s (%s%s)"
+                  % (anterior, self.maquina.estado, self.maquina.ultimo_motivo,
+                     (" desde " + self._origen_comando)
+                     if self._origen_comando else ""))
         await self._evento("state", "info",
                            "Cambio de estado %s -> %s" % (anterior, self.maquina.estado),
                            {"from": anterior, "to": self.maquina.estado,
                             "reason": self.maquina.ultimo_motivo})
 
-    # -- ciclo de sensores y seguridad ------------------------------------
+    # -- presencia, ciclo de sensores y seguridad -------------------------
+    def _marcar_presencia(self, motivo, cm=None):
+        """Anota una presencia detectada por flanco de subida.
+
+        Si el sistema esta desarmado se descarta (fue el propio usuario). Si
+        esta en la cuenta regresiva de salida, la FSM todavia no alerta: antes
+        ese flanco se perdia para siempre y el PIR parecia no funcionar. Ahora
+        queda pendiente hasta que el sistema quede ARMADO.
+        """
+        if self.maquina.estado == fsm_mod.DESARMADO:
+            return
+        self._presencia_pendiente = True
+        self._pendiente_motivo = motivo
+        self._pendiente_cm = cm
+
+    def _resolver_presencia(self, ahora):
+        """Entrega la presencia pendiente en cuanto la FSM puede alertar."""
+        if not self._presencia_pendiente:
+            return []
+        if self.maquina.estado == fsm_mod.DESARMADO:
+            self._presencia_pendiente = False
+            return []
+        if self.maquina.estado == fsm_mod.ARMANDO:
+            return []               # se resuelve al cumplir la cuenta regresiva
+
+        evento = {"type": "presence", "motivo": self._pendiente_motivo}
+        if self._pendiente_cm is not None:
+            evento["cm"] = self._pendiente_cm
+        self._presencia_pendiente = False
+        return self.maquina.handle(ahora, evento)
+
     async def _ciclo(self, ahora):
         nuevas = self.sensores.actualizar(ahora)
         efectos = self.maquina.tick(ahora)
         distancia_alarma = getattr(self.cfg, "DIST_ALARM_CM", 80.0)
 
         # Solo se evalua el flanco de subida: el sensor puede quedarse en alto
-        # varios segundos y no debe generar una alerta por cada muestra.
+        # varios segundos (Wokwi lo deja 5 s) y no debe generar una alerta por
+        # cada muestra. El antirrebote fino lo hace la FSM (cooldown_alerta_s).
         movimiento = nuevas.get("movimiento")
         if movimiento is not None:
-            if movimiento and not self._movimiento_prev and self.maquina.armado():
-                efectos += self.maquina.handle(
-                    ahora, {"type": "presence", "motivo": "movimiento"}
-                )
+            if movimiento and not self._movimiento_prev:
+                self._marcar_presencia("movimiento")
             self._movimiento_prev = bool(movimiento)
 
         distancia = nuevas.get("distancia")
         if distancia is not None:
             dentro = distancia <= distancia_alarma
-            if dentro and not self._distancia_dentro and self.maquina.armado():
-                efectos += self.maquina.handle(
-                    ahora, {"type": "presence", "motivo": "presencia_cercana",
-                            "cm": distancia}
-                )
+            if dentro and not self._distancia_dentro:
+                self._marcar_presencia("presencia_cercana", cm=distancia)
             self._distancia_dentro = dentro
+
+        efectos += self._resolver_presencia(ahora)
 
         clima = nuevas.get("clima") or {}
         if clima.get("temp_c") is not None:
@@ -229,6 +291,15 @@ class Controlador:
     def _al_recibir(self, topico, payload, qos, retain):
         """Callback sincrono del cliente MQTT: solo publica en el bus."""
         if topico == self.cfg.TOPIC_COMMAND:
+            if retain:
+                # Un comando retenido es una orden vieja que el broker repite
+                # en cada conexion: si se aceptara, el nodo se armaria solo
+                # (o se desarmaria solo) en cada reinicio.
+                self._log("comando retenido ignorado: %r" % (payload,))
+                return
+            # Traza del motivo del armado: sin esto, un `arm` ajeno en el
+            # topico publico parecia "el nodo se arma solo".
+            self._log("comando MQTT recibido: %r" % (payload,))
             self.bus.publicar("cmd", payload)
         elif topico == self.cfg.TOPIC_CONFIG:
             try:
@@ -336,6 +407,7 @@ class Controlador:
             evento["pin"] = args.get("pin", mensaje.get("pin"))
 
         rechazo = None
+        self._origen_comando = origen
         efectos = self.maquina.handle(self._ahora(), evento)
         for fx in efectos:
             if fx.get("e") == fsm_mod.FX_RECHAZO:
@@ -441,23 +513,69 @@ class Controlador:
             await asyncio.sleep(self.cfg.OLED_PERIOD_S)
 
     async def _bucle_boton(self):
+        """Sondea el pulsador y confirma el nivel con dos muestras seguidas.
+
+        El sondeo es rapido (20 ms) a proposito: `_bucle_sensores` bloquea el
+        bucle de eventos hasta ~100 ms cuando mide el HC-SR04, y con el sondeo
+        anterior (50 ms) un clic corto se perdia. El estado inicial se adopta
+        sin contarlo como pulsacion: si el pin arranca en 0 el nodo no se arma
+        solo.
+        """
         if self._boton is None:
             return
+        estable = None
+        muestras = 0
         while True:
             try:
                 valor = self._boton.value()
                 ahora_ms = time.ticks_ms()
-                pulso = valor == 0 and self._boton_prev == 1
-                if (pulso and time.ticks_diff(ahora_ms, self._ms_boton)
-                        > self.cfg.BUTTON_DEBOUNCE_MS):
-                    self._ms_boton = ahora_ms
-                    await self.alternar_armado("boton")
-                self._boton_prev = valor
+                if valor == estable:
+                    muestras += 1
+                else:
+                    estable = valor
+                    muestras = 1
+                if muestras >= 2:
+                    if estable != self._nivel_boton:
+                        # Traza que falta cuando "el boton no hace nada": si
+                        # esta linea no aparece, el pin no se esta leyendo.
+                        self._log("boton nivel %d" % estable)
+                        self._nivel_boton = estable
+                    if self._boton_apretado is None:
+                        # Primera lectura estable: se adopta como estado.
+                        self._boton_apretado = estable == 0
+                    elif estable == 0 and not self._boton_apretado:
+                        self._boton_apretado = True
+                        if (time.ticks_diff(ahora_ms, self._ms_boton)
+                                > self.cfg.BUTTON_DEBOUNCE_MS):
+                            self._ms_boton = ahora_ms
+                            self._log("boton: pulsacion")
+                            await self.alternar_armado("boton")
+                    elif estable == 1:
+                        self._boton_apretado = False
             except _CANCELADO:
                 raise
             except Exception as exc:  # noqa: BLE001
                 self._log("boton con error: %s" % exc)
-            await asyncio.sleep(0.05)
+            await asyncio.sleep(self.cfg.BUTTON_POLL_S)
+
+    async def _bucle_latido(self):
+        """Imprime el estado y el nivel del pulsador cada `latido_s`.
+
+        Sirve para saber si el bucle de eventos sigue vivo y que esta viendo en
+        GPIO4, aunque el broker no responda: la seguridad no depende de la red.
+        """
+        while True:
+            await asyncio.sleep(self.latido_s)
+            try:
+                nivel = self._boton.value() if self._boton is not None else "-"
+                self._log("latido estado=%s boton=%s mqtt=%s alertas=%d"
+                          % (self.maquina.estado, nivel,
+                             "ok" if self.cliente.conectado else "sin",
+                             self.maquina.alertas))
+            except _CANCELADO:
+                raise
+            except Exception as exc:  # noqa: BLE001
+                self._log("latido con error: %s" % exc)
 
     async def _bucle_mqtt(self):
         espera = self.cfg.MQTT_RECONNECT_MIN_S
@@ -517,6 +635,7 @@ class Controlador:
             asyncio.create_task(self._bucle_leds()),
             asyncio.create_task(self._bucle_pantalla()),
             asyncio.create_task(self._bucle_comandos()),
+            asyncio.create_task(self._bucle_latido()),
         ]
         if self._boton is not None:
             self.tareas.append(asyncio.create_task(self._bucle_boton()))

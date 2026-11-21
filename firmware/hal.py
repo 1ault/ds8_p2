@@ -16,10 +16,14 @@ def _machine():
 
 
 class Pin:
-    """Envoltorio delgado sobre `machine.Pin` con constantes con nombre."""
+    """Envoltorio delgado sobre `machine.Pin`.
 
-    IN = 0
-    OUT = 1
+    Los valores de `machine.Pin.IN` y `machine.Pin.OUT` son **propios de cada
+    puerto**: en el ESP32 valen 1 y 2, y el 0 es ``GPIO_MODE_DISABLE``. Por eso
+    aqui NUNCA se usan numeros fijos. Con ``IN = 0`` el ESP32 deshabilitaba la
+    entrada y el PIR (GPIO26), el eco del HC-SR04 (GPIO18) y el pulsador
+    (GPIO4) leian siempre 0: la alarma no disparaba y el boton no hacia nada.
+    """
 
     def __init__(self, numero, modo, pull=None):
         self._numero = numero
@@ -57,12 +61,18 @@ def pull_up():
     return _machine().Pin.PULL_UP
 
 
+def pull_down():
+    return _machine().Pin.PULL_DOWN
+
+
 def entrada(numero, pull=None):
-    return Pin(numero, Pin.IN, pull=pull)
+    """Entrada digital. `pull` es ``machine.Pin.PULL_UP``/``PULL_DOWN`` o None."""
+    return Pin(numero, _machine().Pin.IN, pull=pull)
 
 
 def salida(numero):
-    return Pin(numero, Pin.OUT)
+    """Salida digital (LEDs, servo, buzzer antes de crear el PWM)."""
+    return Pin(numero, _machine().Pin.OUT)
 
 
 class PWM:

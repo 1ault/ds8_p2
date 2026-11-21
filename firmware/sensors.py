@@ -82,7 +82,7 @@ class PirSensor:
 class UltrasonicSensor:
     """HC-SR04: mide distancia en cm con mediana de tres disparos."""
 
-    def __init__(self, pin_trig, pin_echo, min_cm=2.0, max_cm=350.0,
+    def __init__(self, pin_trig, pin_echo, min_cm=2.0, max_cm=400.0,
                  timeout_us=30000, muestras=3):
         self._trig = hal.salida(pin_trig)
         self._echo = hal.entrada(pin_echo)
@@ -187,7 +187,12 @@ class SensorSuite:
             ahora = self._reloj()
         nuevas = {}
         for nombre, sensor, periodo in self._sensores:
-            if ahora - self._ultimo[nombre] < periodo:
+            espera = ahora - self._ultimo[nombre]
+            if espera < 0:
+                # El reloj monotono (ticks_ms) dio la vuelta: se trata como
+                # periodo vencido para que la suite no se congele.
+                espera = periodo
+            if espera < periodo:
                 continue
             self._ultimo[nombre] = ahora
             try:
