@@ -41,3 +41,5 @@ desktop.ini
 # ------------------------ cuaderno de trabajo local --------------------------
 # Notas sueltas del estudiante: puede contener claves, no va al repositorio.
 install.md
+# Prompts de trabajo con asistentes: no van al repositorio.
+PROMPT_*.md
