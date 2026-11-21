@@ -8,6 +8,7 @@ import json
 import actuators
 import app as app_mod
 import fsm
+from tests.support import fakes
 
 
 class ClienteFalso:
@@ -79,7 +80,7 @@ class SuiteFalsa:
         return 0
 
 
-def crear_controlador(cfg_firmware, reloj, suite=None, cliente=None):
+def crear_controlador(cfg_firmware, reloj, suite=None, cliente=None, log=None):
     panel = actuators.PanelActuadores(
         actuators.Led(cfg_firmware.PIN_LED_RED, "rojo"),
         actuators.Led(cfg_firmware.PIN_LED_GREEN, "verde"),
@@ -94,6 +95,7 @@ def crear_controlador(cfg_firmware, reloj, suite=None, cliente=None):
         panel,
         PantallaFalsa(),
         fsm.crear_desde_config(cfg_firmware),
+        log=log,
         boton=False,
         reloj=reloj,
     )
@@ -101,6 +103,24 @@ def crear_controlador(cfg_firmware, reloj, suite=None, cliente=None):
 
 def leer_json(payload):
     return json.loads(payload) if isinstance(payload, (str, bytes)) else payload
+
+
+def controlador_con_boton(cfg_firmware, reloj, log=None):
+    """Controlador con el pulsador activo; devuelve (controlador, pin falso)."""
+    panel = actuators.PanelActuadores(
+        actuators.Led(cfg_firmware.PIN_LED_RED, "rojo"),
+        actuators.Led(cfg_firmware.PIN_LED_GREEN, "verde"),
+        actuators.Buzzer(cfg_firmware.PIN_BUZZER),
+        actuators.ServoLock(cfg_firmware.PIN_SERVO),
+    )
+    controlador = app_mod.Controlador(
+        cfg_firmware, WifiFalsa(), ClienteFalso(), SuiteFalsa(), panel,
+        PantallaFalsa(), fsm.crear_desde_config(cfg_firmware),
+        log=log, boton=True, reloj=reloj,
+    )
+    boton = [p for p in fakes.DoblePin.instancias
+             if p.numero == cfg_firmware.PIN_BUTTON][-1]
+    return controlador, boton
 
 
 class TestTelemetria:
@@ -288,6 +308,213 @@ class TestCiclo:
         assert controlador.panel.cerradura.cerrada is False
         await controlador.procesar_comando({"cmd": "arm"})
         assert controlador.panel.cerradura.cerrada is True
+
+
+class TestTrazasDeCerradura:
+    """La cerradura tenia un problema de usabilidad: abrir o rechazar no
+    dejaba ninguna linea en el monitor serie, asi que parecia que "no paso
+    nada". Ahora cada efecto deja su traza."""
+
+    async def test_abrir_deja_traza(self, cfg_firmware, reloj):
+        trazas = []
+        controlador = crear_controlador(cfg_firmware, reloj, log=trazas.append)
+        await controlador.procesar_comando(
+            {"cmd": "unlock", "args": {"pin": cfg_firmware.UNLOCK_PIN}})
+        assert controlador.panel.cerradura.cerrada is False
+        assert any("cerradura abierta" in t for t in trazas)
+
+    async def test_armado_rechaza_y_deja_traza(self, cfg_firmware, reloj):
+        trazas = []
+        controlador = crear_controlador(cfg_firmware, reloj, log=trazas.append)
+        await controlador.procesar_comando({"cmd": "arm"})
+        await controlador.procesar_comando(
+            {"cmd": "unlock", "args": {"pin": cfg_firmware.UNLOCK_PIN}})
+        assert controlador.panel.cerradura.cerrada is True
+        assert any("comando rechazado: unlock (sistema_armado)" in t
+                   for t in trazas)
+
+    async def test_el_cierre_automatico_deja_traza(self, cfg_firmware, reloj):
+        trazas = []
+        controlador = crear_controlador(cfg_firmware, reloj, log=trazas.append)
+        await controlador.procesar_comando(
+            {"cmd": "unlock", "args": {"pin": cfg_firmware.UNLOCK_PIN}})
+        reloj.avanzar(cfg_firmware.AUTO_RELOCK_S + 1)
+        await controlador._ciclo(reloj())
+        assert controlador.panel.cerradura.cerrada is True
+        assert any("cerradura cerrada (auto_relock)" in t for t in trazas)
+
+
+class TestPresenciaDuranteElArmado:
+    """Regresion: la presencia vista durante la cuenta regresiva se perdia.
+
+    El PIR de Wokwi deja OUT en ALTO 5 s. Si el pulso empezaba mientras corria
+    la cuenta de salida, la FSM lo ignoraba (es correcto: todavia no esta
+    armado) pero el controlador ya marcaba el flanco como consumido, asi que
+    al quedar ARMADO no habia ninguna alerta: el OLED mostraba `Mov SI` con
+    `Alerta 0` y la sirena no sonaba nunca.
+    """
+
+    async def test_movimiento_en_la_cuenta_dispara_al_armar(self, cfg_firmware,
+                                                            reloj):
+        suite = SuiteFalsa()
+        controlador = crear_controlador(cfg_firmware, reloj, suite)
+        await controlador.procesar_comando({"cmd": "arm"})
+
+        suite.datos = {"movimiento": True}      # el pulso empieza en ARMING
+        await controlador._ciclo(reloj())
+        assert controlador.maquina.estado == fsm.ARMANDO
+        assert controlador.maquina.alertas == 0
+
+        suite.datos = {"movimiento": False}     # el pulso ya termino
+        reloj.avanzar(cfg_firmware.EXIT_DELAY_S + 1)
+        await controlador._ciclo(reloj())
+
+        assert controlador.maquina.estado == fsm.ALARMA
+        assert controlador.maquina.alertas == 1
+        assert controlador.panel.buzzer.activo is True
+
+    async def test_movimiento_sostenido_al_armar_suena_una_sola_vez(
+            self, cfg_firmware, reloj):
+        suite = SuiteFalsa()
+        controlador = crear_controlador(cfg_firmware, reloj, suite)
+        await controlador.procesar_comando({"cmd": "arm"})
+        suite.datos = {"movimiento": True}
+        await controlador._ciclo(reloj())
+        reloj.avanzar(cfg_firmware.EXIT_DELAY_S + 1)
+        await controlador._ciclo(reloj())
+        reloj.avanzar(0.2)
+        await controlador._ciclo(reloj())
+        assert controlador.maquina.alertas == 1
+
+    async def test_presencia_desarmado_no_queda_pendiente(self, cfg_firmware,
+                                                           reloj):
+        suite = SuiteFalsa({"movimiento": True})
+        controlador = crear_controlador(cfg_firmware, reloj, suite)
+        await controlador._ciclo(reloj())       # el usuario pasa estando LISTO
+        assert controlador.maquina.alertas == 0
+
+        await controlador.procesar_comando({"cmd": "arm"})
+        reloj.avanzar(cfg_firmware.EXIT_DELAY_S + 1)
+        await controlador._ciclo(reloj())
+        assert controlador.maquina.estado == fsm.ARMADO
+        assert controlador.maquina.alertas == 0
+
+    async def test_presencia_cercana_en_la_cuenta_dispara_al_armar(
+            self, cfg_firmware, reloj):
+        suite = SuiteFalsa()
+        controlador = crear_controlador(cfg_firmware, reloj, suite)
+        await controlador.procesar_comando({"cmd": "arm"})
+        suite.datos = {"distancia": 40.0}
+        await controlador._ciclo(reloj())
+        assert controlador.maquina.estado == fsm.ARMANDO
+        reloj.avanzar(cfg_firmware.EXIT_DELAY_S + 1)
+        await controlador._ciclo(reloj())
+        assert controlador.maquina.estado == fsm.ALARMA
+        assert controlador.maquina.ultimo_motivo == "presencia_cercana"
+
+
+class TestArranque:
+    def test_el_reloj_por_defecto_avanza_en_milisegundos(self):
+        import time as _time
+
+        inicio = app_mod.reloj_monotonico()
+        _time.sleep(0.02)
+        assert app_mod.reloj_monotonico() - inicio >= 0.005
+
+    async def test_comando_retenido_no_arma_al_reconectar(self, cfg_firmware,
+                                                          reloj):
+        controlador = crear_controlador(cfg_firmware, reloj)
+        controlador._al_recibir(cfg_firmware.TOPIC_COMMAND,
+                                b'{"id": "viejo", "cmd": "arm"}', 1, True)
+        assert controlador._buzon.size() == 0
+        assert controlador.maquina.estado == fsm.DESARMADO
+
+    async def test_comando_no_retenido_si_entra(self, cfg_firmware, reloj):
+        controlador = crear_controlador(cfg_firmware, reloj)
+        controlador._al_recibir(cfg_firmware.TOPIC_COMMAND,
+                                b'{"id": "nuevo", "cmd": "arm"}', 1, False)
+        assert controlador._buzon.size() == 1
+
+    async def test_boton_bajo_al_arrancar_no_arma_solo(self, cfg_firmware,
+                                                       reloj):
+        controlador, boton = controlador_con_boton(cfg_firmware, reloj)
+        boton.simular(0)                       # pin bajo desde el arranque
+
+        tarea = asyncio.create_task(controlador._bucle_boton())
+        try:
+            await asyncio.sleep(0.2)
+            assert controlador.maquina.estado == fsm.DESARMADO
+
+            boton.simular(1)                   # se suelta
+            await asyncio.sleep(0.15)
+            assert controlador.maquina.estado == fsm.DESARMADO
+
+            boton.simular(0)                   # pulsacion de verdad
+            for _ in range(30):
+                if controlador.maquina.estado == fsm.ARMANDO:
+                    break
+                await asyncio.sleep(0.02)
+            assert controlador.maquina.estado == fsm.ARMANDO
+        finally:
+            tarea.cancel()
+            await asyncio.sleep(0)
+
+    async def test_un_clic_corto_tambien_arma(self, cfg_firmware, reloj):
+        """El sondeo de 20 ms debe ver un pulso de ~60 ms (clic rapido)."""
+        controlador, boton = controlador_con_boton(cfg_firmware, reloj)
+        boton.simular(1)
+
+        tarea = asyncio.create_task(controlador._bucle_boton())
+        try:
+            await asyncio.sleep(0.1)           # adopta el reposo
+            boton.simular(0)                   # clic corto
+            await asyncio.sleep(0.06)
+            boton.simular(1)
+            for _ in range(40):
+                if controlador.maquina.estado == fsm.ARMANDO:
+                    break
+                await asyncio.sleep(0.02)
+            assert controlador.maquina.estado == fsm.ARMANDO
+        finally:
+            tarea.cancel()
+            await asyncio.sleep(0)
+
+    async def test_la_traza_dice_de_donde_vino_el_armado(self, cfg_firmware,
+                                                         reloj):
+        trazas = []
+        controlador, boton = controlador_con_boton(cfg_firmware, reloj,
+                                                   log=trazas.append)
+        boton.simular(1)
+        tarea = asyncio.create_task(controlador._bucle_boton())
+        try:
+            await asyncio.sleep(0.1)
+            boton.simular(0)
+            for _ in range(40):
+                if controlador.maquina.estado == fsm.ARMANDO:
+                    break
+                await asyncio.sleep(0.02)
+        finally:
+            tarea.cancel()
+            await asyncio.sleep(0)
+        assert any("boton: pulsacion" in t for t in trazas)
+        assert any("desde boton" in t for t in trazas)
+        assert any("boton nivel 1" in t for t in trazas)
+        assert any("boton nivel 0" in t for t in trazas)
+
+    async def test_el_latido_dice_estado_y_nivel_del_boton(self, cfg_firmware,
+                                                           reloj):
+        trazas = []
+        controlador, boton = controlador_con_boton(cfg_firmware, reloj,
+                                                   log=trazas.append)
+        controlador.latido_s = 0.02
+        boton.simular(1)
+        tarea = asyncio.create_task(controlador._bucle_latido())
+        try:
+            await asyncio.sleep(0.12)
+        finally:
+            tarea.cancel()
+            await asyncio.sleep(0)
+        assert any("latido estado=DISARMED boton=1" in t for t in trazas)
 
 
 class TestRecepcionMqtt:

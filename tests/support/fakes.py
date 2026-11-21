@@ -12,11 +12,18 @@ import types
 
 
 class DoblePin:
-    """Pin digital falso."""
+    """Pin digital falso.
 
-    IN = 0
-    OUT = 1
+    Los valores de IN/OUT/PULL_* son los del **ESP32** (IN=1, OUT=2,
+    PULL_UP=2), no 0/1: asi una prueba detecta si el HAL vuelve a usar
+    numeros fijos. En el ESP32, 0 es ``GPIO_MODE_DISABLE`` e inutiliza la
+    entrada (fue el bug del PIR, del eco del HC-SR04 y del pulsador).
+    """
+
+    IN = 1
+    OUT = 2
     PULL_UP = 2
+    PULL_DOWN = 1
 
     instancias: list["DoblePin"] = []
 

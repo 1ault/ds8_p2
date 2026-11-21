@@ -114,6 +114,17 @@ class TestUltrasonido:
         # el disparo de 116 us equivale a 2 cm: se descarta y sobrevive la mediana
         assert sensor.leer() == 100.0
 
+    def test_acepta_el_fondo_de_escala_de_wokwi(self, maquina, cfg_firmware):
+        """Wokwi arranca el HC-SR04 en 400 cm: debe ser una lectura valida.
+
+        Con el limite anterior (350 cm) el simulador entregaba 400 cm, el
+        firmware lo descartaba y el OLED mostraba `Dst --` desde el arranque.
+        """
+        maquina.pulsos[18] = 23200            # 400 cm * 58 us/cm
+        sensor = sensors.UltrasonicSensor(
+            5, 18, min_cm=2.0, max_cm=cfg_firmware.DIST_MAX_CM)
+        assert sensor.leer() == 400.0
+
 
 class TestLuz:
     def test_lectura_media_corresponde_a_cien_lux(self):
@@ -181,6 +192,14 @@ class TestSuite:
 
     def test_nombres(self):
         assert self._suite().nombres() == ["luz", "movimiento"]
+
+    def test_reloj_que_da_la_vuelta_no_congela_la_suite(self):
+        """ticks_ms() se reinicia cada ~12 dias: los sensores deben seguir."""
+        suite = self._suite()
+        suite.actualizar(1000.0)
+        # El reloj monotono paso de 1073741 s a 0 s (vuelta de ticks_ms).
+        nuevas = suite.actualizar(0.1)
+        assert set(nuevas) == {"luz", "movimiento"}
 
     def test_construir_desde_config(self, cfg_firmware):
         suite = sensors.construir_desde_config(cfg_firmware)
