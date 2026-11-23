@@ -1,8 +1,24 @@
 """Interfaz local del nodo en el OLED.
 
-Muestra el estado de seguridad, las lecturas y la salud de la conexion. Si la
-pantalla no responde (o no esta conectada), el sistema sigue funcionando: la
-pantalla se marca como no disponible y cada refresco se ignora.
+QUE MUESTRA
+-----------
+El estado de seguridad (LISTO / ARMANDO / ARMADO / ALARMA), las lecturas de
+los sensores, cuantas alertas hubo, si la cerradura esta cerrada, si la sirena
+suena y como anda el WiFi/MQTT. Es la "cara" del nodo cuando no estas mirando
+la computadora.
+
+SI NO HAY PANTALLA
+------------------
+El sistema **no depende** del OLED. Si el modulo no responde (cable suelto,
+otra direccion I2C, una placa sin pantalla como la maqueta fisica), el
+constructor atrapa el error, deja `disponible = False` y cada refresco
+devuelve `False` sin hacer nada. La seguridad sigue funcionando igual.
+
+COMO SE DIBUJA
+--------------
+La fuente de `framebuf` mide 8x8 pixeles: cada caracter ocupa 8 de ancho y 8
+de alto. Sobre 128 pixeles de ancho entran 128 / 8 = **16 caracteres** por
+renglon, y sobre 64 de alto entran 8 renglones.
 """
 
 import hal
@@ -10,6 +26,7 @@ import ssd1306
 
 
 def _recortar(texto, ancho_caracteres):
+    """Corta el texto si no entra (`texto[:n]` toma los primeros n)."""
     texto = str(texto)
     if len(texto) > ancho_caracteres:
         return texto[:ancho_caracteres]
@@ -38,6 +55,7 @@ class Pantalla:
             self.disponible = True
             self._log("OLED listo en 0x%02X" % addr)
         except Exception as exc:  # noqa: BLE001
+            # Sin pantalla el nodo arranca igual: esto no es un error fatal.
             self._log("OLED no disponible: %s" % exc)
 
     # El panel mide 64 px y la fuente 8 px de alto. El bisel del modulo tapa
@@ -47,11 +65,17 @@ class Pantalla:
     ALTO_LINEA = 8
 
     def _linea(self, fila, texto):
+        """Escribe un renglon: la fila 1 va en y=12, la 2 en y=20, etc."""
         y = self.Y_INICIO + (fila - 1) * self.ALTO_LINEA
         self._oled.texto(_recortar(texto, self.ancho // 8), 1, y, 1)
 
     def _linea_inversa(self, texto):
-        """Titulo del estado en video inverso, bajo el bisel del modulo."""
+        """Titulo del estado en video inverso, bajo el bisel del modulo.
+
+        Se pinta un rectangulo blanco relleno y despues el texto en negro
+        (color 0): eso es el "video inverso" que hace que el estado salte a la
+        vista.
+        """
         self._oled.rectangulo_relleno(0, 1, self.ancho, 10, 1)
         self._oled.texto(_recortar(texto, self.ancho // 8), 1, 2, 0)
 
@@ -61,12 +85,15 @@ class Pantalla:
             return False
 
         estado = datos.get("state", "DISARMED")
+        # Si el estado no esta en TITULOS se escribe tal cual (por las dudas).
         titulo = self.TITULOS.get(estado, estado)
         self._oled.limpiar(0)
         self._linea_inversa(titulo)
 
         temp = datos.get("temp_c")
         hum = datos.get("hum_pct")
+        # `%-5s` alinea a la izquierda en 5 caracteres: asi los numeros no
+        # "bailan" cuando pasan de 9.9 a 10.0.
         self._linea(1, "T %-5s H %-5s" % (_num(temp), _num(hum)))
 
         lux = datos.get("lux")
@@ -85,7 +112,9 @@ class Pantalla:
         enlace = "MQTT ok" if datos.get("mqtt") else "MQTT --"
         restante = datos.get("arm_in_s")
         if restante:
-            # durante la cuenta regresiva la ultima linea es la barra
+            # Durante la cuenta regresiva la ultima linea es la barra.
+            # `fraccion` = 0 al empezar y 1 al terminar: se dibuja lo que ya
+            # paso, por eso es 1 menos lo que falta sobre el total.
             fraccion = 1.0 - (float(restante) / float(datos.get("exit_delay", 10)))
             self._oled.texto("Salida %2ds" % int(restante), 1, 52, 1)
             self._oled.barra(74, 52, 52, 9, fraccion, 1)
@@ -106,6 +135,7 @@ class Pantalla:
         return True
 
     def limpiar(self):
+        """Deja la pantalla en negro."""
         if not self.disponible or self._oled is None:
             return False
         self._oled.limpiar(0)
@@ -114,6 +144,11 @@ class Pantalla:
 
 
 def _num(valor, decimales=1):
+    """Formatea un numero para el OLED; `--` cuando no hay lectura.
+
+    `("%.1f" % 24.5)` da "24.5"; el `try` existe porque un sensor puede
+    devolver algo raro y la pantalla nunca debe romperse por eso.
+    """
     if valor is None:
         return "--"
     try:

@@ -1,32 +1,36 @@
 """Punto de entrada del nodo Centinela IoT (ESP32 + MicroPython).
 
-Este es el archivo que Wokwi ejecuta al pulsar "Play": debe llamarse
-``main.py``. Solo ARRANCA el sistema; la logica de seguridad vive en
-``app.py`` (controlador) y ``fsm.py`` (maquina de estados).
+QUE ES ESTE ARCHIVO
+-------------------
+Es el **programa principal**: el que Wokwi ejecuta al pulsar "Play" (por eso
+tiene que llamarse `main.py`). Su trabajo es **armar el sistema** y arrancarlo:
 
-Orden de arranque
------------------
-1. Pantalla OLED: se enciende primero para dar feedback aunque falle la red.
-2. WiFi: se intenta conectar con reintentos; sin red el nodo sigue en local.
-3. Sensores, actuadores y maquina de estados: se construyen desde ``config``.
-4. Controlador: lanza las tareas asincronas (MQTT, muestreo, telemetria,
-   LEDs, pantalla, comandos y boton) y espera hasta que lo cancelen.
+    pantalla -> WiFi -> actuadores -> sensores -> FSM -> cliente MQTT
+             -> controlador -> ejecutar
 
-Convenciones
+No tiene logica de seguridad: eso vive en `app.py` (el controlador, que
+coordina las tareas) y en `fsm.py` (la maquina de estados). Tenerlo separado
+hace que el arranque se lea de un vistazo y que las pruebas puedan crear el
+controlador sin pasar por aca.
+
+ORDEN DE ARRANQUE (Y POR QUE ESE ORDEN)
+---------------------------------------
+1. **Pantalla primero**: si el WiFi tarda 20 s o falla, en el OLED ya se ve
+   "Iniciando...". Es lo unico que da feedback sin red.
+2. **WiFi**: con reintentos y tiempo limite. Sin red el nodo sigue en local
+   (mide, muestra y hace sonar la sirena igual).
+3. **Sensores, actuadores y FSM**: se construyen desde `config.py`.
+4. **Cliente MQTT**: se crea aca pero **no conecta** todavia; la conexion la
+   hace el controlador dentro de su bucle, para poder reintentar sin
+   reiniciar el nodo.
+5. **Controlador**: recibe todas las piezas y lanza las tareas asincronas.
+
+CONVENCIONES
 ------------
-* Las llamadas usan **argumentos con nombre** (``param=valor``): asi se lee
-  que recibe cada funcion sin depender de comentarios por argumento.
-* Los tipos van en el docstring de cada funcion (``Args``), porque
-  MicroPython no aplica anotaciones de tipo en tiempo de ejecucion.
-* Los pines, umbrales y topicos salen de ``config.py``; aqui no hay numeros
+* Las llamadas usan **argumentos con nombre** (`param=valor`): asi se lee que
+  recibe cada funcion sin mirar la definicion.
+* Los pines, umbrales y topicos salen de `config.py`; aca no hay numeros
   magicos ni credenciales escritas a mano.
-
-Notas de red
-------------
-* ``WIFI_SSID`` es ``Wokwi-GUEST`` y no lleva contrasena; esa red da salida
-  real a Internet, que es lo que permite llegar a ``broker.hivemq.com``.
-* El cliente MQTT solo se construye aqui; la conexion la hace el controlador
-  dentro de su bucle, para poder reintentar si el broker no responde.
 """
 
 import asyncio

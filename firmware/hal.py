@@ -1,15 +1,32 @@
 """Capa de abstraccion de hardware (HAL) para MicroPython.
 
-Todo el uso de `machine` queda concentrado aqui. El resto de los modulos
-(llamados "drivers") reciben estos objetos por inyeccion, lo que permite
-probarlos en CPython con dobles sin tocar hardware.
+QUE ES UN HAL
+-------------
+Es la unica parte del firmware que habla con `machine`, `dht` y `network`.
+Todo lo demas (FSM, controlador, sensores, actuadores) recibe estos objetos
+por inyeccion. Dos motivos:
 
-Se importa `machine` de forma diferida (dentro de las funciones) para que el
-modulo pueda cargarse en un equipo de escritorio.
+1. **Se puede probar en la PC**: `tests/support/fakes.py` reemplaza `machine`
+   por dobles que recuerdan lo que se les pidio, y las 337 pruebas corren sin
+   placa ni simulador.
+2. **Un solo lugar para las rarezas del chip**: si cambia la version de
+   MicroPython, se toca aca y no en diez archivos.
+
+`machine` se importa **dentro** de las funciones (`_machine()`), no arriba,
+para que este archivo se pueda cargar en CPython sin placa.
+
+OJO CON LOS MODOS DE PIN
+------------------------
+Los valores de `machine.Pin.IN` y `machine.Pin.OUT` **son propios de cada
+puerto**. En el ESP32 valen 1 y 2, y el 0 es ``GPIO_MODE_DISABLE``. Escribir
+`IN = 0` (como hacia antes este archivo) deshabilitaba la entrada y el PIR, el
+eco del HC-SR04 y el pulsador leian siempre 0. Por eso se usan SIEMPRE las
+constantes del puerto.
 """
 
 
 def _machine():
+    """Importa `machine` recien cuando se necesita (ver docstring de arriba)."""
     import machine
 
     return machine
@@ -35,6 +52,7 @@ class Pin:
         self._instancia()
 
     def _instancia(self):
+        """Crea (una sola vez) el `machine.Pin` real y lo devuelve."""
         if self._obj is None:
             m = _machine()
             kwargs = {}
@@ -44,6 +62,7 @@ class Pin:
         return self._obj
 
     def value(self, valor=None):
+        """Lee el nivel (0/1) o lo escribe si se pasa `valor`."""
         pin = self._instancia()
         if valor is None:
             return pin.value()
@@ -58,10 +77,12 @@ class Pin:
 
 
 def pull_up():
+    """Constante del puerto para activar la resistencia de pull-up interna."""
     return _machine().Pin.PULL_UP
 
 
 def pull_down():
+    """Constante del puerto para activar la resistencia de pull-down interna."""
     return _machine().Pin.PULL_DOWN
 
 
@@ -78,7 +99,22 @@ def salida(numero):
 class PWM:
     """PWM con compatibilidad entre versiones de MicroPython.
 
-    ESP32 reciente expone `duty_u16`; versiones anteriores solo `duty`.
+    Un PWM es una salida que se prende y apaga miles de veces por segundo.
+    Dos parametros la definen:
+
+    * **frecuencia** (Hz): cuantas veces por segundo. Define el *tono* en un
+      buzzer (2400 Hz suena distinto que 2900 Hz).
+    * **ciclo de trabajo** (duty): que fraccion del tiempo esta en alto. 50 %
+      es la mitad; con un buzzer, 50 % suena mas fuerte que 10 %.
+
+    Hay dos escalas para el duty:
+
+        `duty()`      0 .. 1023    (10 bits, la clasica de MicroPython)
+        `duty_u16()`  0 .. 65535   (16 bits, la que usan los ESP32 nuevos)
+
+    Por eso la conversion `valor * 65535 / 1023` (y al reves
+    `valor * 1023 / 65535`): 1023 es el fondo de escala de una y 65535 de la
+    otra. Es una regla de tres, no un numero magico.
     """
 
     def __init__(self, pin_obj, freq=None, duty=None):
@@ -95,6 +131,7 @@ class PWM:
         return self._obj
 
     def freq(self, hz=None):
+        """Lee la frecuencia actual o la fija en Hz."""
         obj = self._instancia()
         if hz is None:
             return obj.freq()
@@ -102,7 +139,12 @@ class PWM:
         return hz
 
     def duty(self, valor=None):
-        """Ciclo de trabajo en el rango 0-1023."""
+        """Ciclo de trabajo en el rango 0-1023.
+
+        Si el objeto tiene `duty_u16` (ESP32 moderno) se convierte con la
+        regla de tres; si no, se usa el `duty()` viejo tal cual.
+        512 es el 50 %: `512 * 65535 / 1023 = 32799`.
+        """
         obj = self._instancia()
         if valor is None:
             return obj.duty()
@@ -113,7 +155,12 @@ class PWM:
         return valor
 
     def duty_u16(self, valor=None):
-        """Ciclo de trabajo en el rango 0-65535 (para servos)."""
+        """Ciclo de trabajo en el rango 0-65535 (lo usan los servos).
+
+        El servo necesita una resolucion fina: a 50 Hz el pulso util va de
+        0,5 ms a 2,5 ms sobre 20 ms de periodo, o sea del 2,5 % al 12,5 %,
+        y en una escala de 1023 eso serian solo ~100 pasos.
+        """
         obj = self._instancia()
         if valor is None:
             return obj.duty_u16()
@@ -124,12 +171,24 @@ class PWM:
         return valor
 
     def deinit(self):
+        """Libera el canal PWM (deja el pin como estaba)."""
         if self._obj is not None and hasattr(self._obj, "deinit"):
             self._obj.deinit()
 
 
 class ADC:
-    """ADC de una sola lectura con atenuacion para el rango 0-3.3 V."""
+    """ADC de una sola lectura con atenuacion para el rango 0-3.3 V.
+
+    El ADC mide una tension y la convierte en un numero:
+
+    * `WIDTH_12BIT` -> 12 bits -> valores de 0 a 4095.
+    * `read_u16()` de los ESP32 nuevos -> 16 bits -> 0 a 65535.
+    * `ATTN_11DB` amplia el rango de entrada hasta ~3,3 V (sin atenuar el
+      maximo seria ~1,1 V y el LDR se saturaria enseguida).
+
+    `max_raw()` informa ese fondo de escala para que `sensors.LightSensor`
+    pueda convertir el numero a voltios sin adivinar.
+    """
 
     def __init__(self, numero):
         self._numero = numero
@@ -140,6 +199,7 @@ class ADC:
         if self._obj is None:
             m = _machine()
             self._obj = m.ADC(m.Pin(self._numero))
+            # `hasattr` porque no todos los puertos tienen estas funciones.
             if hasattr(self._obj, "atten"):
                 self._obj.atten(m.ADC.ATTN_11DB)
             if hasattr(self._obj, "width"):
@@ -151,10 +211,12 @@ class ADC:
         return self._obj
 
     def max_raw(self):
+        """Fondo de escala del ADC (4095 o 65535 segun el puerto)."""
         self._instancia()
         return self._max
 
     def read(self):
+        """Lectura cruda del ADC (0 .. max_raw())."""
         obj = self._instancia()
         if hasattr(obj, "read_u16"):
             return obj.read_u16()
@@ -162,6 +224,12 @@ class ADC:
 
 
 class I2C:
+    """Bus I2C: dos cables (SDA y SCL) y una direccion por dispositivo.
+
+    El OLED SSD1306 vive en la direccion 0x3C. Solo se usa el bus 0 y se
+    inicializa a 400 kHz (fast mode) para que el refresco sea rapido.
+    """
+
     def __init__(self, sda, scl, freq):
         self._sda = sda
         self._scl = scl
@@ -176,9 +244,11 @@ class I2C:
         return self._obj
 
     def writeto(self, addr, datos):
+        """Escribe bytes en un dispositivo (asi se le mandan comandos al OLED)."""
         return self._instancia().writeto(addr, datos)
 
     def writevto(self, addr, vectores):
+        """Escribe varios bloques seguidos (fallback si no hay `writevto`)."""
         obj = self._instancia()
         if hasattr(obj, "writevto"):
             return obj.writevto(addr, vectores)
@@ -186,6 +256,7 @@ class I2C:
             obj.writeto(addr, v)
 
     def scan(self):
+        """Lista las direcciones que responden (sirve para detectar el OLED)."""
         obj = self._instancia()
         if hasattr(obj, "scan"):
             return obj.scan()
@@ -193,7 +264,13 @@ class I2C:
 
 
 class DHT22:
-    """Sensor DHT22 (temperatura y humedad)."""
+    """Sensor DHT22 (temperatura y humedad).
+
+    Protocolo de un solo cable: `measure()` dispara la conversion (tarda ~2 s)
+    y despues `temperature()`/`humidity()` devuelven el ultimo resultado. El
+    driver `dht` configura el pin por su cuenta, por eso no se le pasa un
+    `hal.Pin` sino un `machine.Pin`.
+    """
 
     def __init__(self, numero):
         self._numero = numero
@@ -207,6 +284,7 @@ class DHT22:
         return self._obj
 
     def measure(self):
+        """Dispara una medicion y devuelve (temperatura C, humedad %)."""
         self._instancia().measure()
         return self._instancia().temperature(), self._instancia().humidity()
 
@@ -214,8 +292,17 @@ class DHT22:
 def pulse_us(pin_obj, nivel, timeout_us):
     """Mide el ancho de un pulso en microsegundos (HC-SR04).
 
-    Usa `machine.time_pulse_us` cuando esta disponible; si no, hace una espera
-    activa equivalente.
+    El HC-SR04 devuelve el eco como un pulso alto en ECHO: dura ~58 us por
+    cada centimetro de ida y vuelta. `machine.time_pulse_us` hace exactamente
+    eso de forma nativa, pero si el puerto no la tiene se hace a mano.
+
+    Los codigos de error son los del estandar:
+
+        -1  se acabo el tiempo esperando que empiece el pulso
+        -2  empezo el pulso pero no termino a tiempo
+
+    `ticks_us()` puede dar la vuelta (es un contador de 32 bits), por eso la
+    resta se hace con `ticks_diff()` y nunca con `-`.
     """
     m = _machine()
     if hasattr(m, "time_pulse_us"):
@@ -224,13 +311,16 @@ def pulse_us(pin_obj, nivel, timeout_us):
 
     obj = pin_obj._instancia()
     inicio = time.ticks_us()
+    # 1) esperar a que el pin este en el nivel (arranque del pulso)
     while obj.value() == nivel:
         if time.ticks_diff(time.ticks_us(), inicio) > timeout_us:
             return -2
+    # 2) esperar el flanco contrario (fin del pulso)
     while obj.value() != nivel:
         if time.ticks_diff(time.ticks_us(), inicio) > timeout_us:
             return -1
     borde = time.ticks_us()
+    # 3) medir cuanto dura el pulso
     while obj.value() == nivel:
         if time.ticks_diff(time.ticks_us(), inicio) > timeout_us:
             return -2
