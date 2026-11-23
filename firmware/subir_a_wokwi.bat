@@ -4,12 +4,20 @@ cd /d "%~dp0"
 
 set "PUERTO=rfc2217://localhost:4000"
 
-rem --- Python: se prefiere el venv del proyecto (..\.venv), si existe ---
-rem     Orden: ..\.venv  ->  venv externo viejo  ->  python del PATH
-for %%I in ("%~dp0..") do set "RAIZ=%%~fI"
-set "PY=python"
-if exist "%RAIZ%\.venv\Scripts\python.exe" set "PY=%RAIZ%\.venv\Scripts\python.exe"
-if not exist "%RAIZ%\.venv\Scripts\python.exe" if exist "%USERPROFILE%\code\iot\Parcial2_IoT_Seguridad\venv\Scripts\python.exe" set "PY=%USERPROFILE%\code\iot\Parcial2_IoT_Seguridad\venv\Scripts\python.exe"
+rem --- Python: se busca mpremote en los venv conocidos, en este orden ---
+rem     1) el venv del proyecto, si esta carpeta vive dentro del repo (..\.venv)
+rem     2) el venv del repo en su ruta actual
+rem     3) el venv del repo en la ruta nueva (Desktop\IOT)
+rem     4) el venv viejo de la primera sesion
+rem     5) el python del PATH
+set "PY="
+for %%C in (
+  "%~dp0..\.venv\Scripts\python.exe"
+  "%USERPROFILE%\code\iot_p2\.venv\Scripts\python.exe"
+  "%USERPROFILE%\Desktop\IOT\iot_p2\.venv\Scripts\python.exe"
+  "%USERPROFILE%\code\iot\Parcial2_IoT_Seguridad\venv\Scripts\python.exe"
+) do if not defined PY if exist "%%~C" set "PY=%%~C"
+if not defined PY set "PY=python"
 
 echo ============================================================
 echo  Centinela IoT - subir los 12 modulos al Wokwi de VS Code
