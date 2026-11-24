@@ -336,5 +336,15 @@ Proyecto desarrollado para el **Parcial #2** de *Desarrollo de Software VIII*
 - **Nube**: ThingSpeak (canal de 8 campos + TalkBack).
 - **Pruebas**: 324 casos automatizados con pytest.
 
+## Integrantes y grupo
+
+- Grupo 1: 
+- Integrantes:
+  - Abdias Ruedas 8-1011-2210 
+  - Jose Sanchez 8-1032-2111
+  - Miguel Martinez 8-960-778
+  - Whitney Ault 8-984-1977
+
+
 > Las capturas del simulador de Wokwi y del canal de ThingSpeak deben tomarlas
 > con su propia cuenta; el guion está en [`docs/guia_demo.md`](docs/guia_demo.md).
