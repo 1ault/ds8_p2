@@ -9,10 +9,10 @@ Carpeta: `C:\Users\Usuario\code\iot_p2`
 - Release: <https://github.com/1ault/ds8_p2/releases/tag/v2.0.0>
 - Último commit: `b2c23e8` — `fix(fsm): una alerta nueva reactiva la sirena tras mute`
 - Wokwi: <https://wokwi.com/projects/480810097290000385>
-- Pruebas locales: **334 passed**
-- Firmware: **2.0.3** (el número aparece en la primera línea del monitor serie)
+- Pruebas locales: **337 passed**
+- Firmware: **2.0.5** (el número aparece en la primera línea del monitor serie)
 - Cumplimiento de los requisitos del PDF: `docs/cumplimiento_requisitos.md`
-- Cambios de esta sesión: **sin commit ni push** (pendiente de autorización)
+- Publicado: `163a7a1` (documentación + fix de memoria del WiFi)
 
 ## Problema que se resolvió: el PIR no disparaba la alarma
 
@@ -45,6 +45,22 @@ y se verificó la corrección con los 6 casos.
    un `arm` publicado con *retain* en `centinela/dev01/cmd` rearmaba el nodo
    en cada arranque. Además, el botón asumía "suelto" en la primera lectura:
    si GPIO4 ya estaba en 0 al arrancar, el nodo se armaba solo.
+
+## El bug que impedía arrancar en Wokwi (y cómo se resolvió)
+
+El nodo arrancaba y moría en el WiFi:
+
+    E wifi: Expected to init 10 rx buffer, actual is 1
+    OSError: WiFi Out of Memory
+
+Causa: en MicroPython **los docstrings se cargan en RAM** (los comentarios `#`
+no). La documentación había agregado 42,5 KB de docstrings y el driver WiFi no
+conseguía sus 10 buffers contiguos.
+
+Arreglo: los **168** docstrings pasaron a comentarios (`#`) en los 12 módulos,
+con el mismo contenido y **0 B** de RAM. Además `main.py` hace `gc.collect()`
+antes de crear el WiFi y `net.py` recolecta y reintenta si la WLAN falla por
+memoria. Versión **2.0.5**.
 
 ## El bug de fondo (encontrado al final): los modos de pin
 
