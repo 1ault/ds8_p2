@@ -1,32 +1,31 @@
-"""Interfaz local del nodo en el OLED.
-
-QUE MUESTRA
------------
-El estado de seguridad (LISTO / ARMANDO / ARMADO / ALARMA), las lecturas de
-los sensores, cuantas alertas hubo, si la cerradura esta cerrada, si la sirena
-suena y como anda el WiFi/MQTT. Es la "cara" del nodo cuando no estas mirando
-la computadora.
-
-SI NO HAY PANTALLA
-------------------
-El sistema **no depende** del OLED. Si el modulo no responde (cable suelto,
-otra direccion I2C, una placa sin pantalla como la maqueta fisica), el
-constructor atrapa el error, deja `disponible = False` y cada refresco
-devuelve `False` sin hacer nada. La seguridad sigue funcionando igual.
-
-COMO SE DIBUJA
---------------
-La fuente de `framebuf` mide 8x8 pixeles: cada caracter ocupa 8 de ancho y 8
-de alto. Sobre 128 pixeles de ancho entran 128 / 8 = **16 caracteres** por
-renglon, y sobre 64 de alto entran 8 renglones.
-"""
+# Interfaz local del nodo en el OLED.
+#
+# QUE MUESTRA
+# -----------
+# El estado de seguridad (LISTO / ARMANDO / ARMADO / ALARMA), las lecturas de
+# los sensores, cuantas alertas hubo, si la cerradura esta cerrada, si la sirena
+# suena y como anda el WiFi/MQTT. Es la "cara" del nodo cuando no estas mirando
+# la computadora.
+#
+# SI NO HAY PANTALLA
+# ------------------
+# El sistema **no depende** del OLED. Si el modulo no responde (cable suelto,
+# otra direccion I2C, una placa sin pantalla como la maqueta fisica), el
+# constructor atrapa el error, deja `disponible = False` y cada refresco
+# devuelve `False` sin hacer nada. La seguridad sigue funcionando igual.
+#
+# COMO SE DIBUJA
+# --------------
+# La fuente de `framebuf` mide 8x8 pixeles: cada caracter ocupa 8 de ancho y 8
+# de alto. Sobre 128 pixeles de ancho entran 128 / 8 = **16 caracteres** por
+# renglon, y sobre 64 de alto entran 8 renglones.
 
 import hal
 import ssd1306
 
 
 def _recortar(texto, ancho_caracteres):
-    """Corta el texto si no entra (`texto[:n]` toma los primeros n)."""
+    # Corta el texto si no entra (`texto[:n]` toma los primeros n).
     texto = str(texto)
     if len(texto) > ancho_caracteres:
         return texto[:ancho_caracteres]
@@ -34,7 +33,7 @@ def _recortar(texto, ancho_caracteres):
 
 
 class Pantalla:
-    """Vista local del sistema sobre el OLED SSD1306."""
+    # Vista local del sistema sobre el OLED SSD1306.
 
     TITULOS = {
         "DISARMED": "LISTO",
@@ -65,22 +64,21 @@ class Pantalla:
     ALTO_LINEA = 8
 
     def _linea(self, fila, texto):
-        """Escribe un renglon: la fila 1 va en y=12, la 2 en y=20, etc."""
+        # Escribe un renglon: la fila 1 va en y=12, la 2 en y=20, etc.
         y = self.Y_INICIO + (fila - 1) * self.ALTO_LINEA
         self._oled.texto(_recortar(texto, self.ancho // 8), 1, y, 1)
 
     def _linea_inversa(self, texto):
-        """Titulo del estado en video inverso, bajo el bisel del modulo.
-
-        Se pinta un rectangulo blanco relleno y despues el texto en negro
-        (color 0): eso es el "video inverso" que hace que el estado salte a la
-        vista.
-        """
+        # Titulo del estado en video inverso, bajo el bisel del modulo.
+        #
+        #         Se pinta un rectangulo blanco relleno y despues el texto en negro
+        #         (color 0): eso es el "video inverso" que hace que el estado salte a la
+        #         vista.
         self._oled.rectangulo_relleno(0, 1, self.ancho, 10, 1)
         self._oled.texto(_recortar(texto, self.ancho // 8), 1, 2, 0)
 
     def mostrar(self, datos):
-        """Pinta el estado completo. `datos` es un diccionario plano."""
+        # Pinta el estado completo. `datos` es un diccionario plano.
         if not self.disponible or self._oled is None:
             return False
 
@@ -125,7 +123,7 @@ class Pantalla:
         return True
 
     def aviso(self, texto):
-        """Mensaje puntual (por ejemplo, durante el arranque)."""
+        # Mensaje puntual (por ejemplo, durante el arranque).
         if not self.disponible or self._oled is None:
             return False
         self._oled.limpiar(0)
@@ -135,7 +133,7 @@ class Pantalla:
         return True
 
     def limpiar(self):
-        """Deja la pantalla en negro."""
+        # Deja la pantalla en negro.
         if not self.disponible or self._oled is None:
             return False
         self._oled.limpiar(0)
@@ -144,11 +142,10 @@ class Pantalla:
 
 
 def _num(valor, decimales=1):
-    """Formatea un numero para el OLED; `--` cuando no hay lectura.
-
-    `("%.1f" % 24.5)` da "24.5"; el `try` existe porque un sensor puede
-    devolver algo raro y la pantalla nunca debe romperse por eso.
-    """
+    # Formatea un numero para el OLED; `--` cuando no hay lectura.
+    #
+    #     `("%.1f" % 24.5)` da "24.5"; el `try` existe porque un sensor puede
+    #     devolver algo raro y la pantalla nunca debe romperse por eso.
     if valor is None:
         return "--"
     try:

@@ -1,49 +1,48 @@
-"""Controlador del nodo: une sensores, maquina de estados, actuadores y MQTT.
-
-QUE ES ESTE ARCHIVO
--------------------
-Es el **director de la orquesta**. La FSM (`fsm.py`) decide, los sensores
-miden y los actuadores actuan; este archivo los hace trabajar juntos y ademas
-publica todo por MQTT.
-
-COMO ESTA ORGANIZADO (mapa rapido)
-----------------------------------
-    Controlador
-    |-- __init__            guarda las piezas y los contadores
-    |-- _ahora / uptime_s   reloj y tiempo encendido
-    |-- _publicar / _evento / _telemetria / _ack   lo que sale por MQTT
-    |-- _aplicar            convierte "efectos" de la FSM en GPIO + eventos
-    |-- _detectar_cambio_estado   avisa cuando cambia de estado
-    |-- _marcar_presencia / _resolver_presencia   no perder una intrusion
-    |-- _ciclo              el corazon: leer, decidir, actuar
-    |-- procesar_comando    atiende ordenes (MQTT, panel, pulsador)
-    |-- _bucle_*            tareas de fondo que corren para siempre
-
-POR QUE TAREAS ASINCRONAS
--------------------------
-MicroPython en el ESP32 ejecuta **una sola cosa a la vez** (no hay hilos).
-Si el programa se quedara esperando al WiFi, no leería el PIR ni atendería el
-botón. La solucion son las tareas cooperativas de `asyncio`: cada bucle hace
-un pedacito de trabajo, y cuando llega a un `await` (esperar red, esperar
-tiempo) le devuelve el control a las demas. Por eso **nunca** hay un
-`time.sleep` largo adentro de un bucle: se usa `await asyncio.sleep(...)`.
-
-    _bucle_sensores   cada 50 ms: lee sensores y corre la FSM
-    _bucle_leds       cada 100 ms: parpadeo de LEDs y tono de la sirena
-    _bucle_pantalla   cada 600 ms: redibuja el OLED
-    _bucle_telemetria cada 5 s: publica por MQTT
-    _bucle_comandos   espera ordenes que llegaron por el bus
-    _bucle_boton      cada 20 ms: mira el pulsador
-    _bucle_mqtt       conecta, se suscribe y reintenta si se cae
-    _bucle_latido     cada 10 s: imprime un latido para diagnostico
-
-EL PATRON DE "EFECTOS"
-----------------------
-La FSM no enciende nada: devuelve una lista de efectos como
-`[{"e": "sirena_on"}, {"e": "registrar_alerta", ...}]`. `_aplicar()` recorre
-esa lista y hace lo que corresponde. Asi la logica de seguridad se prueba sin
-hardware y aca queda todo lo que toca pines, JSON y red.
-"""
+# Controlador del nodo: une sensores, maquina de estados, actuadores y MQTT.
+#
+# QUE ES ESTE ARCHIVO
+# -------------------
+# Es el **director de la orquesta**. La FSM (`fsm.py`) decide, los sensores
+# miden y los actuadores actuan; este archivo los hace trabajar juntos y ademas
+# publica todo por MQTT.
+#
+# COMO ESTA ORGANIZADO (mapa rapido)
+# ----------------------------------
+#     Controlador
+#     |-- __init__            guarda las piezas y los contadores
+#     |-- _ahora / uptime_s   reloj y tiempo encendido
+#     |-- _publicar / _evento / _telemetria / _ack   lo que sale por MQTT
+#     |-- _aplicar            convierte "efectos" de la FSM en GPIO + eventos
+#     |-- _detectar_cambio_estado   avisa cuando cambia de estado
+#     |-- _marcar_presencia / _resolver_presencia   no perder una intrusion
+#     |-- _ciclo              el corazon: leer, decidir, actuar
+#     |-- procesar_comando    atiende ordenes (MQTT, panel, pulsador)
+#     |-- _bucle_*            tareas de fondo que corren para siempre
+#
+# POR QUE TAREAS ASINCRONAS
+# -------------------------
+# MicroPython en el ESP32 ejecuta **una sola cosa a la vez** (no hay hilos).
+# Si el programa se quedara esperando al WiFi, no leería el PIR ni atendería el
+# botón. La solucion son las tareas cooperativas de `asyncio`: cada bucle hace
+# un pedacito de trabajo, y cuando llega a un `await` (esperar red, esperar
+# tiempo) le devuelve el control a las demas. Por eso **nunca** hay un
+# `time.sleep` largo adentro de un bucle: se usa `await asyncio.sleep(...)`.
+#
+#     _bucle_sensores   cada 50 ms: lee sensores y corre la FSM
+#     _bucle_leds       cada 100 ms: parpadeo de LEDs y tono de la sirena
+#     _bucle_pantalla   cada 600 ms: redibuja el OLED
+#     _bucle_telemetria cada 5 s: publica por MQTT
+#     _bucle_comandos   espera ordenes que llegaron por el bus
+#     _bucle_boton      cada 20 ms: mira el pulsador
+#     _bucle_mqtt       conecta, se suscribe y reintenta si se cae
+#     _bucle_latido     cada 10 s: imprime un latido para diagnostico
+#
+# EL PATRON DE "EFECTOS"
+# ----------------------
+# La FSM no enciende nada: devuelve una lista de efectos como
+# `[{"e": "sirena_on"}, {"e": "registrar_alerta", ...}]`. `_aplicar()` recorre
+# esa lista y hace lo que corresponde. Asi la logica de seguridad se prueba sin
+# hardware y aca queda todo lo que toca pines, JSON y red.
 
 import asyncio
 import json
@@ -64,16 +63,15 @@ COMANDOS_VALIDOS = ("arm", "disarm", "mute", "unlock", "ping", "set_config")
 
 
 def reloj_monotonico():
-    """Reloj del nodo: segundos con resolucion de milisegundos.
-
-    En el ESP32 `time.time()` devuelve segundos **enteros**: con esa
-    resolucion los periodos de muestreo de 0,15 s (PIR) y 0,5 s (HC-SR04) se
-    redondeaban a 1 s, y la cuenta regresiva saltaba de segundo en segundo.
-    `time.ticks_ms()` cuenta milisegundos desde el arranque.
-
-    `getattr(..., None)` devuelve None si la funcion no existe (CPython puro):
-    en ese caso se usa `time.time()` para que las pruebas no se rompan.
-    """
+    # Reloj del nodo: segundos con resolucion de milisegundos.
+    #
+    #     En el ESP32 `time.time()` devuelve segundos **enteros**: con esa
+    #     resolucion los periodos de muestreo de 0,15 s (PIR) y 0,5 s (HC-SR04) se
+    #     redondeaban a 1 s, y la cuenta regresiva saltaba de segundo en segundo.
+    #     `time.ticks_ms()` cuenta milisegundos desde el arranque.
+    #
+    #     `getattr(..., None)` devuelve None si la funcion no existe (CPython puro):
+    #     en ese caso se usa `time.time()` para que las pruebas no se rompan.
     ticks = getattr(time, "ticks_ms", None)
     if ticks is None:          # CPython sin los dobles de las pruebas
         return time.time()
@@ -94,7 +92,7 @@ _LIMITES_CONFIG = {
 
 
 class Controlador:
-    """Orquestador del nodo de seguridad."""
+    # Orquestador del nodo de seguridad.
 
     def __init__(self, cfg, wifi, cliente, sensores, panel, pantalla, maquina,
                  log=None, reloj=None, boton=True):
@@ -149,21 +147,20 @@ class Controlador:
 
     # -- utilidades --------------------------------------------------------
     def _ahora(self):
-        """Instante actual en segundos (todo el controlador usa este reloj)."""
+        # Instante actual en segundos (todo el controlador usa este reloj).
         return self._reloj()
 
     def uptime_s(self):
-        """Segundos desde que arranco el controlador."""
+        # Segundos desde que arranco el controlador.
         if self.iniciado_en is None:
             return 0
         return int(self._ahora() - self.iniciado_en)
 
     async def _publicar(self, topico, datos, qos=0, retain=False):
-        """Publica en MQTT sin romper nada si no hay conexion.
-
-        Si `datos` es un diccionario se convierte a JSON; si ya es texto o
-        bytes se manda tal cual. Devuelve False si no hay broker o si falla.
-        """
+        # Publica en MQTT sin romper nada si no hay conexion.
+        #
+        #         Si `datos` es un diccionario se convierte a JSON; si ya es texto o
+        #         bytes se manda tal cual. Devuelve False si no hay broker o si falla.
         if not self.cliente.conectado:
             return False
         try:
@@ -175,12 +172,11 @@ class Controlador:
             return False
 
     async def _evento(self, tipo, severidad, mensaje, extra=None):
-        """Publica un evento del sistema (contrato comun con el backend).
-
-        Campos: version del protocolo, dispositivo, tipo (`kind`), gravedad
-        (`severity`), mensaje legible, uptime y estado de la FSM. `extra` es
-        un diccionario opcional con datos propios del evento.
-        """
+        # Publica un evento del sistema (contrato comun con el backend).
+        #
+        #         Campos: version del protocolo, dispositivo, tipo (`kind`), gravedad
+        #         (`severity`), mensaje legible, uptime y estado de la FSM. `extra` es
+        #         un diccionario opcional con datos propios del evento.
         self.eventos += 1
         datos = {
             "v": self.cfg.PROTOCOL_VERSION,
@@ -197,7 +193,7 @@ class Controlador:
         return await self._publicar(self.cfg.TOPIC_EVENTS, datos, qos=1)
 
     def _telemetria(self):
-        """Arma el mensaje periodico con las lecturas y el estado."""
+        # Arma el mensaje periodico con las lecturas y el estado.
         lect = self.sensores.instantanea()
         clima = lect.get("clima") or {}
         resumen = self.maquina.resumen()
@@ -224,19 +220,18 @@ class Controlador:
         }
 
     async def _publicar_telemetria(self):
-        """Publica la telemetria (QoS 0: si se pierde una, viene otra en 5 s)."""
+        # Publica la telemetria (QoS 0: si se pierde una, viene otra en 5 s).
         self.ultimo_telemetria = self._ahora()
         return await self._publicar(self.cfg.TOPIC_TELEMETRY, self._telemetria(),
                                     qos=0)
 
     # -- aplicacion de efectos --------------------------------------------
     async def _aplicar(self, efectos):
-        """Ejecuta la lista de efectos que devolvio la FSM.
-
-        Cada rama hace dos cosas: actua sobre el hardware y deja constancia
-        (traza en el monitor serie + evento por MQTT). El `elif` compara el
-        campo `e` del efecto con las constantes de `fsm.py`.
-        """
+        # Ejecuta la lista de efectos que devolvio la FSM.
+        #
+        #         Cada rama hace dos cosas: actua sobre el hardware y deja constancia
+        #         (traza en el monitor serie + evento por MQTT). El `elif` compara el
+        #         campo `e` del efecto con las constantes de `fsm.py`.
         for fx in efectos:
             clase = fx.get("e")
 
@@ -292,11 +287,10 @@ class Controlador:
                                     "reason": fx.get("motivo")})
 
     async def _detectar_cambio_estado(self):
-        """Deja traza y publica un evento SOLO si el estado cambio de verdad.
-
-        Comparar con `self.ultimo_estado` evita llenar el log de mensajes
-        repetidos en cada ciclo (el ciclo corre 20 veces por segundo).
-        """
+        # Deja traza y publica un evento SOLO si el estado cambio de verdad.
+        #
+        #         Comparar con `self.ultimo_estado` evita llenar el log de mensajes
+        #         repetidos en cada ciclo (el ciclo corre 20 veces por segundo).
         if self.maquina.estado == self.ultimo_estado:
             return
         anterior = self.ultimo_estado
@@ -312,13 +306,12 @@ class Controlador:
 
     # -- presencia, ciclo de sensores y seguridad -------------------------
     def _marcar_presencia(self, motivo, cm=None):
-        """Anota una presencia detectada por flanco de subida.
-
-        Si el sistema esta desarmado se descarta (fue el propio usuario). Si
-        esta en la cuenta regresiva de salida, la FSM todavia no alerta: antes
-        ese flanco se perdia para siempre y el PIR parecia no funcionar. Ahora
-        queda pendiente hasta que el sistema quede ARMADO.
-        """
+        # Anota una presencia detectada por flanco de subida.
+        #
+        #         Si el sistema esta desarmado se descarta (fue el propio usuario). Si
+        #         esta en la cuenta regresiva de salida, la FSM todavia no alerta: antes
+        #         ese flanco se perdia para siempre y el PIR parecia no funcionar. Ahora
+        #         queda pendiente hasta que el sistema quede ARMADO.
         if self.maquina.estado == fsm_mod.DESARMADO:
             return
         self._presencia_pendiente = True
@@ -326,10 +319,9 @@ class Controlador:
         self._pendiente_cm = cm
 
     def _resolver_presencia(self, ahora):
-        """Entrega la presencia pendiente en cuanto la FSM puede alertar.
-
-        Devuelve los efectos de la FSM (lista vacia si todavia no corresponde).
-        """
+        # Entrega la presencia pendiente en cuanto la FSM puede alertar.
+        #
+        #         Devuelve los efectos de la FSM (lista vacia si todavia no corresponde).
         if not self._presencia_pendiente:
             return []
         if self.maquina.estado == fsm_mod.DESARMADO:
@@ -345,16 +337,15 @@ class Controlador:
         return self.maquina.handle(ahora, evento)
 
     async def _ciclo(self, ahora):
-        """Un paso del sistema de seguridad (corre cada 50 ms).
-
-        Orden de las operaciones:
-          1. leer los sensores que vencieron su periodo,
-          2. dejar que la FSM resuelva sus temporizadores (`tick`),
-          3. detectar FLANCOS (no niveles) de movimiento y de distancia,
-          4. resolver una presencia que quedo pendiente,
-          5. pasar la temperatura a la FSM,
-          6. aplicar todos los efectos juntos y avisar si cambio el estado.
-        """
+        # Un paso del sistema de seguridad (corre cada 50 ms).
+        #
+        #         Orden de las operaciones:
+        #           1. leer los sensores que vencieron su periodo,
+        #           2. dejar que la FSM resuelva sus temporizadores (`tick`),
+        #           3. detectar FLANCOS (no niveles) de movimiento y de distancia,
+        #           4. resolver una presencia que quedo pendiente,
+        #           5. pasar la temperatura a la FSM,
+        #           6. aplicar todos los efectos juntos y avisar si cambio el estado.
         nuevas = self.sensores.actualizar(ahora)
         efectos = self.maquina.tick(ahora)
         distancia_alarma = getattr(self.cfg, "DIST_ALARM_CM", 80.0)
@@ -390,11 +381,10 @@ class Controlador:
 
     # -- comandos ----------------------------------------------------------
     def _al_recibir(self, topico, payload, qos, retain):
-        """Callback sincrono del cliente MQTT: solo publica en el bus.
-
-        Es sincrono porque lo llama la tarea de lectura del socket; el trabajo
-        pesado (parsear, validar, actuar) lo hace `_bucle_comandos`.
-        """
+        # Callback sincrono del cliente MQTT: solo publica en el bus.
+        #
+        #         Es sincrono porque lo llama la tarea de lectura del socket; el trabajo
+        #         pesado (parsear, validar, actuar) lo hace `_bucle_comandos`.
         if topico == self.cfg.TOPIC_COMMAND:
             if retain:
                 # Un comando retenido es una orden vieja que el broker repite
@@ -417,12 +407,11 @@ class Controlador:
                                       "args": datos, "source": "mqtt_config"})
 
     def _aplicar_config(self, args):
-        """Cambia umbrales en caliente, validando clave y rango.
-
-        Solo acepta las claves de `_LIMITES_CONFIG`. Devuelve dos
-        diccionarios: `applied` (lo que se aplico) y `rejected` (motivo del
-        rechazo), que viajan en el ACK.
-        """
+        # Cambia umbrales en caliente, validando clave y rango.
+        #
+        #         Solo acepta las claves de `_LIMITES_CONFIG`. Devuelve dos
+        #         diccionarios: `applied` (lo que se aplico) y `rejected` (motivo del
+        #         rechazo), que viajan en el ACK.
         aplicados = {}
         rechazados = {}
         for clave, valor in (args or {}).items():
@@ -454,11 +443,10 @@ class Controlador:
         return {"applied": aplicados, "rejected": rechazados}
 
     async def _ack(self, cid, cmd, ok, resultado=None, motivo=None, origen=None):
-        """Respuesta al emisor de un comando.
-
-        El backend espera este ACK para marcar la orden como OK, RECHAZADO o
-        TIMEOUT (si no llega en 8 s). `cid` es el id que mando el backend.
-        """
+        # Respuesta al emisor de un comando.
+        #
+        #         El backend espera este ACK para marcar la orden como OK, RECHAZADO o
+        #         TIMEOUT (si no llega en 8 s). `cid` es el id que mando el backend.
         datos = {
             "v": self.cfg.PROTOCOL_VERSION,
             "device": self.cfg.DEVICE_ID,
@@ -479,13 +467,12 @@ class Controlador:
         return await self._publicar(self.cfg.TOPIC_ACK, datos, qos=1)
 
     async def procesar_comando(self, crudo):
-        """Procesa un comando (bytes JSON o diccionario). Devuelve el ACK.
-
-        1. Acepta bytes/str (lo que llega de MQTT) o un diccionario ya armado
-           (lo que arma el pulsador o el panel).
-        2. Valida que el comando este en la lista blanca.
-        3. `ping` y `set_config` se resuelven aca; el resto va a la FSM.
-        """
+        # Procesa un comando (bytes JSON o diccionario). Devuelve el ACK.
+        #
+        #         1. Acepta bytes/str (lo que llega de MQTT) o un diccionario ya armado
+        #            (lo que arma el pulsador o el panel).
+        #         2. Valida que el comando este en la lista blanca.
+        #         3. `ping` y `set_config` se resuelven aca; el resto va a la FSM.
         if isinstance(crudo, (bytes, bytearray, str)):
             try:
                 mensaje = json.loads(crudo)
@@ -552,19 +539,18 @@ class Controlador:
         return ok
 
     async def alternar_armado(self, origen="boton"):
-        """Un toque del pulsador: arma si estaba desarmado, desarma si no."""
+        # Un toque del pulsador: arma si estaba desarmado, desarma si no.
         cmd = "disarm" if self.maquina.armado() else "arm"
         return await self.procesar_comando({"id": None, "cmd": cmd,
                                             "args": {}, "source": origen})
 
     # -- tareas ------------------------------------------------------------
     async def _bucle_sensores(self):
-        """El bucle mas importante: cada 50 ms corre un ciclo de seguridad.
-
-        El `try/except` es a proposito: si un sensor lanza un error raro, se
-        anota y **el bucle sigue**. Un fallo de lectura no puede apagar el
-        sistema de seguridad.
-        """
+        # El bucle mas importante: cada 50 ms corre un ciclo de seguridad.
+        #
+        #         El `try/except` es a proposito: si un sensor lanza un error raro, se
+        #         anota y **el bucle sigue**. Un fallo de lectura no puede apagar el
+        #         sistema de seguridad.
         while True:
             ahora = self._ahora()
             try:
@@ -576,7 +562,7 @@ class Controlador:
             await asyncio.sleep(self.cfg.LOOP_TICK_S)
 
     async def _bucle_telemetria(self):
-        """Publica la telemetria cada `TELEMETRY_PERIOD_S` (5 s)."""
+        # Publica la telemetria cada `TELEMETRY_PERIOD_S` (5 s).
         while True:
             await asyncio.sleep(self.cfg.TELEMETRY_PERIOD_S)
             try:
@@ -587,11 +573,10 @@ class Controlador:
                 self._log("telemetria con error: %s" % exc)
 
     async def _bucle_comandos(self):
-        """Espera ordenes del bus y las procesa de a una.
-
-        `await self._buzon.get()` duerme la tarea hasta que el callback de MQTT
-        (o el pulsador) deja algo: no consume CPU mientras espera.
-        """
+        # Espera ordenes del bus y las procesa de a una.
+        #
+        #         `await self._buzon.get()` duerme la tarea hasta que el callback de MQTT
+        #         (o el pulsador) deja algo: no consume CPU mientras espera.
         while True:
             evento = await self._buzon.get()
             try:
@@ -602,11 +587,10 @@ class Controlador:
                 self._log("comando con error: %s" % exc)
 
     async def _bucle_leds(self):
-        """Patrones de LED y tono bitonal de la sirena (cada 100 ms).
-
-        No usa `sleep` por estado: mira el reloj y decide, asi puede atender
-        varias cosas (LED + sirena) en la misma pasada.
-        """
+        # Patrones de LED y tono bitonal de la sirena (cada 100 ms).
+        #
+        #         No usa `sleep` por estado: mira el reloj y decide, asi puede atender
+        #         varias cosas (LED + sirena) en la misma pasada.
         intervalo = 0.1
         while True:
             ahora_ms = time.ticks_ms()
@@ -652,7 +636,7 @@ class Controlador:
             await asyncio.sleep(intervalo)
 
     async def _bucle_pantalla(self):
-        """Redibuja el OLED cada `OLED_PERIOD_S` (0,6 s)."""
+        # Redibuja el OLED cada `OLED_PERIOD_S` (0,6 s).
         while True:
             try:
                 self.pantalla.mostrar(self.datos_pantalla())
@@ -663,17 +647,16 @@ class Controlador:
             await asyncio.sleep(self.cfg.OLED_PERIOD_S)
 
     async def _bucle_boton(self):
-        """Sondea el pulsador y confirma el nivel con dos muestras seguidas.
-
-        El sondeo es rapido (20 ms) a proposito: `_bucle_sensores` bloquea el
-        bucle de eventos hasta ~100 ms cuando mide el HC-SR04, y con el sondeo
-        anterior (50 ms) un clic corto se perdia. El estado inicial se adopta
-        sin contarlo como pulsacion: si el pin arranca en 0 el nodo no se arma
-        solo.
-
-        `muestras` cuenta lecturas consecutivas iguales: exigir 2 evita tomar
-        como pulsacion un ruido de una sola lectura.
-        """
+        # Sondea el pulsador y confirma el nivel con dos muestras seguidas.
+        #
+        #         El sondeo es rapido (20 ms) a proposito: `_bucle_sensores` bloquea el
+        #         bucle de eventos hasta ~100 ms cuando mide el HC-SR04, y con el sondeo
+        #         anterior (50 ms) un clic corto se perdia. El estado inicial se adopta
+        #         sin contarlo como pulsacion: si el pin arranca en 0 el nodo no se arma
+        #         solo.
+        #
+        #         `muestras` cuenta lecturas consecutivas iguales: exigir 2 evita tomar
+        #         como pulsacion un ruido de una sola lectura.
         if self._boton is None:
             return
         estable = None
@@ -713,11 +696,10 @@ class Controlador:
             await asyncio.sleep(self.cfg.BUTTON_POLL_S)
 
     async def _bucle_latido(self):
-        """Imprime el estado y el nivel del pulsador cada `latido_s`.
-
-        Sirve para saber si el bucle de eventos sigue vivo y que esta viendo en
-        GPIO4, aunque el broker no responda: la seguridad no depende de la red.
-        """
+        # Imprime el estado y el nivel del pulsador cada `latido_s`.
+        #
+        #         Sirve para saber si el bucle de eventos sigue vivo y que esta viendo en
+        #         GPIO4, aunque el broker no responda: la seguridad no depende de la red.
         while True:
             await asyncio.sleep(self.latido_s)
             try:
@@ -732,13 +714,12 @@ class Controlador:
                 self._log("latido con error: %s" % exc)
 
     async def _bucle_mqtt(self):
-        """Conecta al broker, se suscribe y reintenta si la conexion se cae.
-
-        Pasos de cada vuelta: conectar (con LWT `offline`) -> suscribirse a
-        `cmd` y `config` a QoS 1 -> publicar `online` retenido -> avisar por
-        eventos -> esperar a que se caiga (`esperar_caida`). Cuando se cae,
-        espera 2 s (y despues 4, 8... hasta 60) antes de reintentar.
-        """
+        # Conecta al broker, se suscribe y reintenta si la conexion se cae.
+        #
+        #         Pasos de cada vuelta: conectar (con LWT `offline`) -> suscribirse a
+        #         `cmd` y `config` a QoS 1 -> publicar `online` retenido -> avisar por
+        #         eventos -> esperar a que se caiga (`esperar_caida`). Cuando se cae,
+        #         espera 2 s (y despues 4, 8... hasta 60) antes de reintentar.
         espera = self.cfg.MQTT_RECONNECT_MIN_S
         while True:
             try:
@@ -767,7 +748,7 @@ class Controlador:
             espera = min(self.cfg.MQTT_RECONNECT_MAX_S, espera * 2)
 
     def datos_pantalla(self):
-        """Arma el diccionario que consume `display.Pantalla.mostrar`."""
+        # Arma el diccionario que consume `display.Pantalla.mostrar`.
         lect = self.sensores.instantanea()
         clima = lect.get("clima") or {}
         restante = self.maquina.restante_salida(self._ahora())
@@ -789,12 +770,11 @@ class Controlador:
         }
 
     async def ejecutar(self):
-        """Arranca todas las tareas cooperativas y espera indefinidamente.
-
-        `asyncio.create_task` programa cada bucle para que corra "en paralelo"
-        (cooperativamente) y `asyncio.gather` espera a todas. Como ninguna
-        termina nunca, esta corrutina dura hasta que el programa se detiene.
-        """
+        # Arranca todas las tareas cooperativas y espera indefinidamente.
+        #
+        #         `asyncio.create_task` programa cada bucle para que corra "en paralelo"
+        #         (cooperativamente) y `asyncio.gather` espera a todas. Como ninguna
+        #         termina nunca, esta corrutina dura hasta que el programa se detiene.
         self.iniciado_en = self._ahora()
         self._log("controlador iniciado: %s" % self.cfg.DEVICE_NAME)
         self.pantalla.aviso("Iniciando...")
@@ -812,12 +792,11 @@ class Controlador:
         await asyncio.gather(*self.tareas)
 
     async def detener(self):
-        """Apagado ordenado: cancela tareas, cierra MQTT y apaga actuadores.
-
-        `tarea.cancel()` hace que el `await` en el que este dormida cada tarea
-        lance `CancelledError` y termine. Despues se cierra el socket y se
-        apagan LEDs y buzzer para no dejar el nodo "sonando solo".
-        """
+        # Apagado ordenado: cancela tareas, cierra MQTT y apaga actuadores.
+        #
+        #         `tarea.cancel()` hace que el `await` en el que este dormida cada tarea
+        #         lance `CancelledError` y termine. Despues se cierra el socket y se
+        #         apagan LEDs y buzzer para no dejar el nodo "sonando solo".
         for tarea in self.tareas:
             tarea.cancel()
         self.tareas = []

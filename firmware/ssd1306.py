@@ -1,39 +1,38 @@
-"""Driver minimo del OLED SSD1306 (I2C 128x64) sobre `framebuf`.
-
-QUE ES
-------
-El SSD1306 es un controlador de pantallas OLED monocromas. Se conecta por
-**I2C**: dos cables (SDA datos, SCL reloj) y una direccion (aca `0x3C`).
-La pantalla es de 128x64 pixeles, pero **no** se le manda pixel por pixel:
-se le manda una copia entera de la imagen (el *framebuffer*) y ella la pinta.
-
-EL FRAMEBUFFER Y "MONO_VLSB"
-----------------------------
-Son 128 columnas x 64 filas de 1 bit = 1024 bytes. Se organiza en **8 paginas
-horizontales de 8 filas**: cada byte representa 8 pixeles *verticales* de una
-columna, y el bit menos significativo es el de arriba (por eso el formato se
-llama VLSB: "vertical, least significant bit first").
-
-    byte de la columna x en la pagina p:
-        bit 0 -> pixel (x, p*8 + 0)
-        bit 1 -> pixel (x, p*8 + 1)
-        ...
-        bit 7 -> pixel (x, p*8 + 7)
-
-Por eso el buffer mide `pages * width` = 8 * 128 = 1024 bytes, y `framebuf`
-hace la conversion desde coordenadas (x, y) a ese formato.
-
-I2C: COMANDOS Y DATOS
----------------------
-Cada escritura I2C empieza con un **byte de control**:
-
-    0x00  lo que sigue son COMANDOS (configuracion de la pantalla)
-    0x40  lo que sigue son DATOS (bytes del framebuffer)
-
-Por eso `_comando()` arma `bytes([0x00]) + ...` y `_datos()` arma
-`b"\\x40" + ...`. Sin ese byte, el OLED interpretaria la imagen como
-comandos y no se veria nada.
-"""
+# Driver minimo del OLED SSD1306 (I2C 128x64) sobre `framebuf`.
+#
+# QUE ES
+# ------
+# El SSD1306 es un controlador de pantallas OLED monocromas. Se conecta por
+# **I2C**: dos cables (SDA datos, SCL reloj) y una direccion (aca `0x3C`).
+# La pantalla es de 128x64 pixeles, pero **no** se le manda pixel por pixel:
+# se le manda una copia entera de la imagen (el *framebuffer*) y ella la pinta.
+#
+# EL FRAMEBUFFER Y "MONO_VLSB"
+# ----------------------------
+# Son 128 columnas x 64 filas de 1 bit = 1024 bytes. Se organiza en **8 paginas
+# horizontales de 8 filas**: cada byte representa 8 pixeles *verticales* de una
+# columna, y el bit menos significativo es el de arriba (por eso el formato se
+# llama VLSB: "vertical, least significant bit first").
+#
+#     byte de la columna x en la pagina p:
+#         bit 0 -> pixel (x, p*8 + 0)
+#         bit 1 -> pixel (x, p*8 + 1)
+#         ...
+#         bit 7 -> pixel (x, p*8 + 7)
+#
+# Por eso el buffer mide `pages * width` = 8 * 128 = 1024 bytes, y `framebuf`
+# hace la conversion desde coordenadas (x, y) a ese formato.
+#
+# I2C: COMANDOS Y DATOS
+# ---------------------
+# Cada escritura I2C empieza con un **byte de control**:
+#
+#     0x00  lo que sigue son COMANDOS (configuracion de la pantalla)
+#     0x40  lo que sigue son DATOS (bytes del framebuffer)
+#
+# Por eso `_comando()` arma `bytes([0x00]) + ...` y `_datos()` arma
+# `b"\x40" + ...`. Sin ese byte, el OLED interpretaria la imagen como
+# comandos y no se veria nada.
 
 import framebuf
 
@@ -56,7 +55,7 @@ _INICIALIZACION = (
 
 
 class SSD1306:
-    """Pantalla OLED monocroma con framebuffer en RAM."""
+    # Pantalla OLED monocroma con framebuffer en RAM.
 
     def __init__(self, i2c, addr=0x3C, width=128, height=64):
         self.i2c = i2c
@@ -73,15 +72,15 @@ class SSD1306:
 
     # -- bajo nivel --------------------------------------------------------
     def _comando(self, *valores):
-        """Manda uno o varios comandos (0x00 = "esto es un comando")."""
+        # Manda uno o varios comandos (0x00 = "esto es un comando").
         self.i2c.writeto(self.addr, bytes([0x00]) + bytes(valores))
 
     def _datos(self, datos):
-        """Manda bytes de imagen (0x40 = "esto es framebuffer")."""
+        # Manda bytes de imagen (0x40 = "esto es framebuffer").
         self.i2c.writeto(self.addr, b"\x40" + bytes(datos))
 
     def iniciar(self):
-        """Aplica la secuencia de inicio y deja la pantalla limpia."""
+        # Aplica la secuencia de inicio y deja la pantalla limpia.
         self._comando(*_INICIALIZACION)
         self.limpiar()
         self.mostrar()
@@ -93,17 +92,16 @@ class SSD1306:
         self._comando(0xAF)
 
     def contraste(self, valor):
-        """Brillo de 0 a 255 (`& 0xFF` deja el valor en un solo byte)."""
+        # Brillo de 0 a 255 (`& 0xFF` deja el valor en un solo byte).
         self._comando(0x81, valor & 0xFF)
 
     def mostrar(self):
-        """Envia el framebuffer a la pantalla pagina por pagina.
-
-        Para cada pagina se manda `0xB0 + pagina` (posicionar en esa pagina) y
-        luego los 128 bytes de esa franja. `inicio = pagina * ancho` es el
-        desplazamiento dentro del buffer: pagina 0 -> bytes 0..127, pagina 1
-        -> 128..255, etc.
-        """
+        # Envia el framebuffer a la pantalla pagina por pagina.
+        #
+        #         Para cada pagina se manda `0xB0 + pagina` (posicionar en esa pagina) y
+        #         luego los 128 bytes de esa franja. `inicio = pagina * ancho` es el
+        #         desplazamiento dentro del buffer: pagina 0 -> bytes 0..127, pagina 1
+        #         -> 128..255, etc.
         ancho = self.width
         for pagina in range(self.pages):
             self._comando(0xB0 + pagina, 0x00, 0x10)
@@ -112,14 +110,14 @@ class SSD1306:
 
     # -- dibujo (delegado a framebuf) --------------------------------------
     def limpiar(self, color=0):
-        """Pinta todo el buffer (0 = negro, 1 = encendido)."""
+        # Pinta todo el buffer (0 = negro, 1 = encendido).
         self.fb.fill(color)
 
     def pixel(self, x, y, color=1):
         self.fb.pixel(x, y, color)
 
     def texto(self, texto, x, y, color=1):
-        """Dibuja texto con la fuente de 8x8 incluida en `framebuf`."""
+        # Dibuja texto con la fuente de 8x8 incluida en `framebuf`.
         self.fb.text(texto, x, y, color)
 
     def linea(self, x1, y1, x2, y2, color=1):
@@ -135,12 +133,11 @@ class SSD1306:
         self.fb.hline(x, y, ancho, color)
 
     def barra(self, x, y, ancho, alto, fraccion, color=1):
-        """Dibuja una barra de progreso de 0.0 a 1.0.
-
-        Primero el marco vacio y despues el relleno por dentro. `ancho - 2` es
-        porque hay un pixel de marco a cada lado; `int(...)` redondea hacia
-        abajo para no dibujar medio pixel de mas.
-        """
+        # Dibuja una barra de progreso de 0.0 a 1.0.
+        #
+        #         Primero el marco vacio y despues el relleno por dentro. `ancho - 2` es
+        #         porque hay un pixel de marco a cada lado; `int(...)` redondea hacia
+        #         abajo para no dibujar medio pixel de mas.
         self.fb.rect(x, y, ancho, alto, color)
         if fraccion < 0:
             fraccion = 0.0

@@ -1,39 +1,39 @@
-"""Punto de entrada del nodo Centinela IoT (ESP32 + MicroPython).
-
-QUE ES ESTE ARCHIVO
--------------------
-Es el **programa principal**: el que Wokwi ejecuta al pulsar "Play" (por eso
-tiene que llamarse `main.py`). Su trabajo es **armar el sistema** y arrancarlo:
-
-    pantalla -> WiFi -> actuadores -> sensores -> FSM -> cliente MQTT
-             -> controlador -> ejecutar
-
-No tiene logica de seguridad: eso vive en `app.py` (el controlador, que
-coordina las tareas) y en `fsm.py` (la maquina de estados). Tenerlo separado
-hace que el arranque se lea de un vistazo y que las pruebas puedan crear el
-controlador sin pasar por aca.
-
-ORDEN DE ARRANQUE (Y POR QUE ESE ORDEN)
----------------------------------------
-1. **Pantalla primero**: si el WiFi tarda 20 s o falla, en el OLED ya se ve
-   "Iniciando...". Es lo unico que da feedback sin red.
-2. **WiFi**: con reintentos y tiempo limite. Sin red el nodo sigue en local
-   (mide, muestra y hace sonar la sirena igual).
-3. **Sensores, actuadores y FSM**: se construyen desde `config.py`.
-4. **Cliente MQTT**: se crea aca pero **no conecta** todavia; la conexion la
-   hace el controlador dentro de su bucle, para poder reintentar sin
-   reiniciar el nodo.
-5. **Controlador**: recibe todas las piezas y lanza las tareas asincronas.
-
-CONVENCIONES
-------------
-* Las llamadas usan **argumentos con nombre** (`param=valor`): asi se lee que
-  recibe cada funcion sin mirar la definicion.
-* Los pines, umbrales y topicos salen de `config.py`; aca no hay numeros
-  magicos ni credenciales escritas a mano.
-"""
+# Punto de entrada del nodo Centinela IoT (ESP32 + MicroPython).
+#
+# QUE ES ESTE ARCHIVO
+# -------------------
+# Es el **programa principal**: el que Wokwi ejecuta al pulsar "Play" (por eso
+# tiene que llamarse `main.py`). Su trabajo es **armar el sistema** y arrancarlo:
+#
+#     pantalla -> WiFi -> actuadores -> sensores -> FSM -> cliente MQTT
+#              -> controlador -> ejecutar
+#
+# No tiene logica de seguridad: eso vive en `app.py` (el controlador, que
+# coordina las tareas) y en `fsm.py` (la maquina de estados). Tenerlo separado
+# hace que el arranque se lea de un vistazo y que las pruebas puedan crear el
+# controlador sin pasar por aca.
+#
+# ORDEN DE ARRANQUE (Y POR QUE ESE ORDEN)
+# ---------------------------------------
+# 1. **Pantalla primero**: si el WiFi tarda 20 s o falla, en el OLED ya se ve
+#    "Iniciando...". Es lo unico que da feedback sin red.
+# 2. **WiFi**: con reintentos y tiempo limite. Sin red el nodo sigue en local
+#    (mide, muestra y hace sonar la sirena igual).
+# 3. **Sensores, actuadores y FSM**: se construyen desde `config.py`.
+# 4. **Cliente MQTT**: se crea aca pero **no conecta** todavia; la conexion la
+#    hace el controlador dentro de su bucle, para poder reintentar sin
+#    reiniciar el nodo.
+# 5. **Controlador**: recibe todas las piezas y lanza las tareas asincronas.
+#
+# CONVENCIONES
+# ------------
+# * Las llamadas usan **argumentos con nombre** (`param=valor`): asi se lee que
+#   recibe cada funcion sin mirar la definicion.
+# * Los pines, umbrales y topicos salen de `config.py`; aca no hay numeros
+#   magicos ni credenciales escritas a mano.
 
 import asyncio
+import gc
 
 # Modulos propios del nodo (todos en la misma carpeta que este archivo).
 import actuators          # LEDs, buzzer y servo-cerradura
@@ -47,40 +47,38 @@ from app import Controlador
 
 
 def log(mensaje):
-    """Escribe una linea de traza en el monitor serie de Wokwi.
-
-    Args:
-        mensaje (str): texto del evento. Se imprime con el prefijo
-            ``[centinela]`` para poder filtrar la salida del sistema.
-
-    Returns:
-        None
-
-    Example:
-        >>> log("WiFi conectado: 10.13.37.2")
-        [centinela] WiFi conectado: 10.13.37.2
-    """
+    # Escribe una linea de traza en el monitor serie de Wokwi.
+    #
+    #     Args:
+    #         mensaje (str): texto del evento. Se imprime con el prefijo
+    #             ``[centinela]`` para poder filtrar la salida del sistema.
+    #
+    #     Returns:
+    #         None
+    #
+    #     Example:
+    #         >>> log("WiFi conectado: 10.13.37.2")
+    #         [centinela] WiFi conectado: 10.13.37.2
     print("[centinela] %s" % mensaje)
 
 
 async def arrancar():
-    """Construye el nodo en orden y ejecuta el controlador hasta el apagado.
-
-    No recibe argumentos: toda la configuracion se lee del modulo ``config``,
-    de modo que el arranque es identico en Wokwi y en hardware real.
-
-    Args:
-        Ninguno.
-
-    Returns:
-        None. La corrutina termina cuando ``Controlador.ejecutar`` deja de
-        correr (por cancelacion o por un error no controlado).
-
-    Raises:
-        asyncio.CancelledError: si se cancela el bucle de eventos (apagado).
-        Exception: cualquier fallo al construir un periferico se propaga; el
-            bloque ``finally`` apaga los actuadores y cierra el cliente MQTT.
-    """
+    # Construye el nodo en orden y ejecuta el controlador hasta el apagado.
+    #
+    #     No recibe argumentos: toda la configuracion se lee del modulo ``config``,
+    #     de modo que el arranque es identico en Wokwi y en hardware real.
+    #
+    #     Args:
+    #         Ninguno.
+    #
+    #     Returns:
+    #         None. La corrutina termina cuando ``Controlador.ejecutar`` deja de
+    #         correr (por cancelacion o por un error no controlado).
+    #
+    #     Raises:
+    #         asyncio.CancelledError: si se cancela el bucle de eventos (apagado).
+    #         Exception: cualquier fallo al construir un periferico se propaga; el
+    #             bloque ``finally`` apaga los actuadores y cierra el cliente MQTT.
     # Traza de arranque: identidad y version del firmware en el monitor serie.
     log("arranque %s (%s) firmware %s" % (cfg.DEVICE_NAME, cfg.DEVICE_ID,
                                           cfg.FIRMWARE_VERSION))
@@ -92,6 +90,10 @@ async def arrancar():
 
     # 2) WiFi con reintentos. Si no hay red, el nodo sigue en local y el
     #    controlador vuelve a intentar la conexion mas adelante.
+    # Se libera la memoria de los imports y del OLED ANTES de crear el WiFi:
+    # el driver pide ~10 buffers de recepcion contiguos y, si el heap esta
+    # fragmentado, falla con "OSError: WiFi Out of Memory".
+    gc.collect()
     wifi = net.Wifi(
         ssid=cfg.WIFI_SSID,
         password=cfg.WIFI_PASSWORD,
@@ -139,18 +141,17 @@ async def arrancar():
 
 
 def main():
-    """Punto de entrada sincrono del programa.
-
-    Crea el bucle de eventos con ``asyncio.run`` y convierte ``Ctrl+C`` en un
-    cierre ordenado. Wokwi ejecuta este archivo automaticamente porque se
-    llama ``main.py``.
-
-    Args:
-        Ninguno.
-
-    Returns:
-        None
-    """
+    # Punto de entrada sincrono del programa.
+    #
+    #     Crea el bucle de eventos con ``asyncio.run`` y convierte ``Ctrl+C`` en un
+    #     cierre ordenado. Wokwi ejecuta este archivo automaticamente porque se
+    #     llama ``main.py``.
+    #
+    #     Args:
+    #         Ninguno.
+    #
+    #     Returns:
+    #         None
     try:
         asyncio.run(arrancar())
     except KeyboardInterrupt:

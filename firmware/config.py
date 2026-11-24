@@ -1,27 +1,26 @@
-"""Configuracion central del nodo ESP32 (Centinela IoT).
-
-QUE ES ESTE ARCHIVO
--------------------
-Es la **lista de ajustes** del nodo: a que pin va cada cosa, cada cuanto se
-mide, a partir de que valor hay alarma, como se llama cada topico MQTT y con
-que credenciales se conecta. Ningun otro archivo del firmware tiene numeros de
-hardware ni de red escritos a mano: todos leen de aca.
-
-Si manana cambias el buzzer del GPIO25 al GPIO32, tocas **una linea** de este
-archivo (y el diagrama) y el resto del programa sigue igual. Eso es lo que se
-llama "un unico punto de configuracion".
-
-QUE ES ``const()``
-------------------
-`const(valor)` le dice a MicroPython "esto nunca cambia, reemplazalo por el
-valor cuando compilas". El resultado es que no gasta RAM ni tiempo en buscar
-el nombre cada vez que se usa. En la PC (CPython) el modulo `micropython` no
-existe, asi que se usa la funcion de abajo, que simplemente devuelve el valor:
-las pruebas corren igual.
-
-Este archivo se ejecuta en la placa: solo constantes y cuentas simples, nada de
-funciones ni bucles.
-"""
+# Configuracion central del nodo ESP32 (Centinela IoT).
+#
+# QUE ES ESTE ARCHIVO
+# -------------------
+# Es la **lista de ajustes** del nodo: a que pin va cada cosa, cada cuanto se
+# mide, a partir de que valor hay alarma, como se llama cada topico MQTT y con
+# que credenciales se conecta. Ningun otro archivo del firmware tiene numeros de
+# hardware ni de red escritos a mano: todos leen de aca.
+#
+# Si manana cambias el buzzer del GPIO25 al GPIO32, tocas **una linea** de este
+# archivo (y el diagrama) y el resto del programa sigue igual. Eso es lo que se
+# llama "un unico punto de configuracion".
+#
+# QUE ES ``const()``
+# ------------------
+# `const(valor)` le dice a MicroPython "esto nunca cambia, reemplazalo por el
+# valor cuando compilas". El resultado es que no gasta RAM ni tiempo en buscar
+# el nombre cada vez que se usa. En la PC (CPython) el modulo `micropython` no
+# existe, asi que se usa la funcion de abajo, que simplemente devuelve el valor:
+# las pruebas corren igual.
+#
+# Este archivo se ejecuta en la placa: solo constantes y cuentas simples, nada de
+# funciones ni bucles.
 
 # ``micropython`` es un modulo propio de la placa; en CPython no existe.
 # El ``try`` permite correr las pruebas en la PC y el ``# type: ignore``
@@ -180,4 +179,4 @@ BUZZER_DUTY = const(512)      # sobre 1023
 # leerlo); `FIRMWARE_VERSION` es la version del firmware y se ve en la primera
 # linea del monitor serie al arrancar.
 PROTOCOL_VERSION = const(1)
-FIRMWARE_VERSION = const("2.0.4")
+FIRMWARE_VERSION = const("2.0.5")

@@ -1,46 +1,45 @@
-"""Maquina de estados de seguridad: logica pura, sin hardware ni red.
-
-QUE ES UNA MAQUINA DE ESTADOS
------------------------------
-Es un programa que en cada momento esta en **un** estado de una lista corta, y
-que solo cambia de estado cuando pasa algo que corresponde. El ejemplo clasico
-es un semaforo: verde -> amarillo -> rojo, y no puede saltar de verde a rojo.
-
-Aca los estados son cuatro:
-
-    DISARMED  sistema desactivado, la cerradura puede abrirse con PIN
-    ARMING    cuenta regresiva de salida antes de armar
-    ARMED     vigilando: cualquier presencia dispara la alarma
-    ALARM     alarma activa hasta que se desarme o se silencie
-
-y las transiciones posibles son:
-
-    DISARMED --(orden "arm")--> ARMING --(pasan 10 s)--> ARMED
-    ARMING   --(orden "disarm")-> DISARMED
-    ARMED    --(presencia o calor)--> ALARM
-    ALARM    --(orden "disarm")-> DISARMED          (apaga la sirena)
-    ALARM    --(orden "mute")----> ALARM silenciada  (sigue en alarma)
-
-POR QUE ESTE ARCHIVO NO TOCA EL HARDWARE
-----------------------------------------
-Porque asi se puede probar **entero** sin placas: cada evento devuelve una
-lista de *efectos* ("que hay que hacer") y el controlador (`app.py`) es el que
-los convierte en GPIO, MQTT o mensajes. Si la FSM encendiera el LED por su
-cuenta, habria que simular un ESP32 para probar una simple transicion.
-
-    fsm.handle(ahora, {"type": "presence"})
-    -> [{"e": "registrar_alerta", ...}, {"e": "sirena_on"}]
-
-Los "efectos" son diccionarios con la clave `"e"` (de "efecto") y los datos
-que necesite cada uno.
-
-COMO SE MIDEN LOS TIEMPOS
--------------------------
-La FSM no tiene reloj propio: cada llamada recibe `ahora` (segundos). Los
-temporizadores se guardan como **fecha de vencimiento** (`_fin_armado = ahora +
-10`) y `tick()` los compara con el nuevo `ahora`. Asi no hay `sleep` adentro:
-el paso del tiempo lo aporta quien llama.
-"""
+# Maquina de estados de seguridad: logica pura, sin hardware ni red.
+#
+# QUE ES UNA MAQUINA DE ESTADOS
+# -----------------------------
+# Es un programa que en cada momento esta en **un** estado de una lista corta, y
+# que solo cambia de estado cuando pasa algo que corresponde. El ejemplo clasico
+# es un semaforo: verde -> amarillo -> rojo, y no puede saltar de verde a rojo.
+#
+# Aca los estados son cuatro:
+#
+#     DISARMED  sistema desactivado, la cerradura puede abrirse con PIN
+#     ARMING    cuenta regresiva de salida antes de armar
+#     ARMED     vigilando: cualquier presencia dispara la alarma
+#     ALARM     alarma activa hasta que se desarme o se silencie
+#
+# y las transiciones posibles son:
+#
+#     DISARMED --(orden "arm")--> ARMING --(pasan 10 s)--> ARMED
+#     ARMING   --(orden "disarm")-> DISARMED
+#     ARMED    --(presencia o calor)--> ALARM
+#     ALARM    --(orden "disarm")-> DISARMED          (apaga la sirena)
+#     ALARM    --(orden "mute")----> ALARM silenciada  (sigue en alarma)
+#
+# POR QUE ESTE ARCHIVO NO TOCA EL HARDWARE
+# ----------------------------------------
+# Porque asi se puede probar **entero** sin placas: cada evento devuelve una
+# lista de *efectos* ("que hay que hacer") y el controlador (`app.py`) es el que
+# los convierte en GPIO, MQTT o mensajes. Si la FSM encendiera el LED por su
+# cuenta, habria que simular un ESP32 para probar una simple transicion.
+#
+#     fsm.handle(ahora, {"type": "presence"})
+#     -> [{"e": "registrar_alerta", ...}, {"e": "sirena_on"}]
+#
+# Los "efectos" son diccionarios con la clave `"e"` (de "efecto") y los datos
+# que necesite cada uno.
+#
+# COMO SE MIDEN LOS TIEMPOS
+# -------------------------
+# La FSM no tiene reloj propio: cada llamada recibe `ahora` (segundos). Los
+# temporizadores se guardan como **fecha de vencimiento** (`_fin_armado = ahora +
+# 10`) y `tick()` los compara con el nuevo `ahora`. Asi no hay `sleep` adentro:
+# el paso del tiempo lo aporta quien llama.
 
 # Estados
 DESARMADO = "DISARMED"
@@ -61,19 +60,18 @@ FX_RECHAZO = "rechazar_comando"
 
 
 def _fx(nombre, **datos):
-    """Arma un efecto: `{"e": nombre}` + los datos que vengan.
-
-    `**datos` junta todos los argumentos con nombre en un diccionario, asi
-    `_fx(FX_AVISO, motivo="armed")` devuelve
-    `{"e": "registrar_aviso", "motivo": "armed"}`.
-    """
+    # Arma un efecto: `{"e": nombre}` + los datos que vengan.
+    #
+    #     `**datos` junta todos los argumentos con nombre en un diccionario, asi
+    #     `_fx(FX_AVISO, motivo="armed")` devuelve
+    #     `{"e": "registrar_aviso", "motivo": "armed"}`.
     efecto = {"e": nombre}
     efecto.update(datos)
     return efecto
 
 
 class SecurityFSM:
-    """Maquina de estados con temporizadores basados en tiempo del llamador."""
+    # Maquina de estados con temporizadores basados en tiempo del llamador.
 
     def __init__(self, salida_s=10, auto_cierre_s=8, sirena_max_s=120,
                  dist_alarma_cm=80.0, temp_alarma_c=45.0, pin="2468",
@@ -106,14 +104,14 @@ class SecurityFSM:
 
     # -- consultas ---------------------------------------------------------
     def armado(self):
-        """True en los tres estados "vigilando" (ARMING, ARMED y ALARM)."""
+        # True en los tres estados "vigilando" (ARMING, ARMED y ALARM).
         return self.estado in (ARMANDO, ARMADO, ALARMA)
 
     def en_alarma(self):
         return self.estado == ALARMA
 
     def restante_salida(self, ahora):
-        """Segundos que faltan para que termine la cuenta regresiva."""
+        # Segundos que faltan para que termine la cuenta regresiva.
         if self._fin_armado is None:
             return 0.0
         restante = self._fin_armado - ahora
@@ -121,7 +119,7 @@ class SecurityFSM:
         return restante if restante > 0 else 0.0
 
     def resumen(self):
-        """Diccionario con el estado para la telemetria y la pantalla."""
+        # Diccionario con el estado para la telemetria y la pantalla.
         return {
             "state": self.estado,
             "locked": self.cerrada,
@@ -134,11 +132,10 @@ class SecurityFSM:
 
     # -- eventos externos --------------------------------------------------
     def handle(self, ahora, evento):
-        """Procesa un evento. Devuelve la lista de efectos a ejecutar.
-
-        `evento` es un diccionario con `"type"`: "command", "presence" o
-        "temperature". Cualquier otro tipo se ignora (devuelve lista vacia).
-        """
+        # Procesa un evento. Devuelve la lista de efectos a ejecutar.
+        #
+        #         `evento` es un diccionario con `"type"`: "command", "presence" o
+        #         "temperature". Cualquier otro tipo se ignora (devuelve lista vacia).
         tipo = evento.get("type", "")
 
         if tipo == "command":
@@ -153,11 +150,10 @@ class SecurityFSM:
         return []
 
     def tick(self, ahora):
-        """Avance del reloj: resuelve temporizadores vencidos.
-
-        Es lo unico que "deja pasar el tiempo". Se llama desde el ciclo de
-        seguridad cada 50 ms.
-        """
+        # Avance del reloj: resuelve temporizadores vencidos.
+        #
+        #         Es lo unico que "deja pasar el tiempo". Se llama desde el ciclo de
+        #         seguridad cada 50 ms.
         efectos = []
 
         # 1) termino la cuenta regresiva: el sistema queda ARMADO.
@@ -184,7 +180,7 @@ class SecurityFSM:
 
     # -- comandos ----------------------------------------------------------
     def _comando(self, ahora, evento):
-        """Ordenes que llegan de MQTT, del panel o del pulsador."""
+        # Ordenes que llegan de MQTT, del panel o del pulsador.
         cmd = evento.get("cmd", "")
         efectos = []
 
@@ -237,7 +233,7 @@ class SecurityFSM:
         return efectos
 
     def _abrir(self, ahora, evento):
-        """Abrir la cerradura con PIN. Tres controles antes de abrir."""
+        # Abrir la cerradura con PIN. Tres controles antes de abrir.
         if self.estado != DESARMADO:
             # Con el sistema armado/vigilando no se abre desde afuera.
             return [_fx(FX_RECHAZO, cmd="unlock", motivo="sistema_armado")]
@@ -264,17 +260,16 @@ class SecurityFSM:
 
     # -- sensores ----------------------------------------------------------
     def _puede_alertar(self, ahora):
-        """Antirrebote: evita contar la misma intrusion muchas veces seguidas.
-
-        Si paso menos de `cooldown_alerta_s` desde la ultima alerta, devuelve
-        False. Sin esto, un movimiento de 5 s generaria decenas de alertas.
-        """
+        # Antirrebote: evita contar la misma intrusion muchas veces seguidas.
+        #
+        #         Si paso menos de `cooldown_alerta_s` desde la ultima alerta, devuelve
+        #         False. Sin esto, un movimiento de 5 s generaria decenas de alertas.
         if self._ultima_alerta is None:
             return True
         return (ahora - self._ultima_alerta) >= self.cooldown_alerta_s
 
     def _presencia(self, ahora, evento):
-        """Alguien aparecio: movimiento del PIR o distancia chica del HC-SR04."""
+        # Alguien aparecio: movimiento del PIR o distancia chica del HC-SR04.
         if self.estado not in (ARMADO, ALARMA):
             # Si esta desarmado o en la cuenta regresiva, no se alerta (el
             # controlador se encarga de no perder la presencia en ese caso).
@@ -302,7 +297,7 @@ class SecurityFSM:
         return efectos
 
     def _temperatura(self, ahora, evento):
-        """Sobrecalentamiento: segunda fuente de deteccion, sin movimiento."""
+        # Sobrecalentamiento: segunda fuente de deteccion, sin movimiento.
         celsius = evento.get("c")
         if celsius is None:
             return []
@@ -330,7 +325,7 @@ class SecurityFSM:
 
 
 def crear_desde_config(cfg):
-    """Construye la FSM a partir del modulo de configuracion."""
+    # Construye la FSM a partir del modulo de configuracion.
     return SecurityFSM(
         salida_s=cfg.EXIT_DELAY_S,
         auto_cierre_s=cfg.AUTO_RELOCK_S,

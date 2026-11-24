@@ -1,21 +1,20 @@
-"""Sensores del nodo: DHT22, PIR, HC-SR04 y LDR.
-
-Cada sensor sabe leer su magnitud y validar el resultado. La suite se encarga
-de respetar los periodos de muestreo, promediar (mediana) y no propagar
-errores: si un sensor falla, se conserva la ultima lectura valida y se cuenta
-el error. Asi una lectura mala nunca tumba el sistema de seguridad.
-
-UNIDADES Y FISICA QUE APARECE ABAJO
------------------------------------
-* **cm / us**: el HC-SR04 mide tiempo de vuelo del sonido. A 20 C el sonido
-  va a ~343 m/s = 0,0343 cm/us, o sea **29 us por cm de ida**. Como el pulso
-  va y vuelve, se dividen por **58** (29 x 2) para obtener centimetros.
-* **lux / ohm**: el LDR es una resistencia que baja con la luz. El modulo
-  arma un divisor con una resistencia fija de 10 kOhm; midiendo la tension
-  del punto medio se despeja la resistencia del LDR y de ahi los lux.
-* **ADC**: el conversor analogico-digital devuelve un entero (0..4095 en 12
-  bits) proporcional a la tension de entrada (0..3,3 V).
-"""
+# Sensores del nodo: DHT22, PIR, HC-SR04 y LDR.
+#
+# Cada sensor sabe leer su magnitud y validar el resultado. La suite se encarga
+# de respetar los periodos de muestreo, promediar (mediana) y no propagar
+# errores: si un sensor falla, se conserva la ultima lectura valida y se cuenta
+# el error. Asi una lectura mala nunca tumba el sistema de seguridad.
+#
+# UNIDADES Y FISICA QUE APARECE ABAJO
+# -----------------------------------
+# * **cm / us**: el HC-SR04 mide tiempo de vuelo del sonido. A 20 C el sonido
+#   va a ~343 m/s = 0,0343 cm/us, o sea **29 us por cm de ida**. Como el pulso
+#   va y vuelve, se dividen por **58** (29 x 2) para obtener centimetros.
+# * **lux / ohm**: el LDR es una resistencia que baja con la luz. El modulo
+#   arma un divisor con una resistencia fija de 10 kOhm; midiendo la tension
+#   del punto medio se despeja la resistencia del LDR y de ahi los lux.
+# * **ADC**: el conversor analogico-digital devuelve un entero (0..4095 en 12
+#   bits) proporcional a la tension de entrada (0..3,3 V).
 
 import time
 
@@ -23,13 +22,12 @@ import hal
 
 
 def _mediana(valores):
-    """Mediana de una lista: el valor del medio cuando se ordenan.
-
-    Se usa mediana y no promedio porque un solo disparo malo (un eco falsero)
-    mueve el promedio pero casi no mueve la mediana. Con cantidad par se
-    promedian los dos centrales; `n // 2` es la division entera (indice del
-    medio).
-    """
+    # Mediana de una lista: el valor del medio cuando se ordenan.
+    #
+    #     Se usa mediana y no promedio porque un solo disparo malo (un eco falsero)
+    #     mueve el promedio pero casi no mueve la mediana. Con cantidad par se
+    #     promedian los dos centrales; `n // 2` es la division entera (indice del
+    #     medio).
     ordenados = sorted(valores)
     n = len(ordenados)
     if n == 0:
@@ -42,7 +40,7 @@ def _mediana(valores):
 
 
 class DhtSensor:
-    """Temperatura y humedad con reintentos y mediana de las ultimas muestras."""
+    # Temperatura y humedad con reintentos y mediana de las ultimas muestras.
 
     def __init__(self, pin, retries=3, retry_delay_ms=60, ventana=3):
         self._dev = hal.DHT22(pin)
@@ -53,12 +51,11 @@ class DhtSensor:
         self._hums = []
 
     def leer(self):
-        """Intenta hasta `retries` veces y devuelve la mediana de la ventana.
-
-        El DHT22 a veces contesta mal (ruido en el cable, timing); por eso se
-        valida el rango y se reintenta. Si todos los intentos fallan se levanta
-        `RuntimeError` y la suite cuenta el error sin cortar el programa.
-        """
+        # Intenta hasta `retries` veces y devuelve la mediana de la ventana.
+        #
+        #         El DHT22 a veces contesta mal (ruido en el cable, timing); por eso se
+        #         valida el rango y se reintenta. Si todos los intentos fallan se levanta
+        #         `RuntimeError` y la suite cuenta el error sin cortar el programa.
         ultimo_error = None
         for intento in range(self._retries):
             try:
@@ -90,13 +87,12 @@ class DhtSensor:
 
 
 class PirSensor:
-    """Sensor de movimiento: salida digital con antirrebote por tiempo.
-
-    El HC-SR501 entrega 1 mientras detecta movimiento y lo mantiene un rato
-    (se ajusta con el potenciometro del modulo, 5 s por defecto en Wokwi). Aca
-    se agrega un tiempo de mantenimiento propio para que un pulso corto no se
-    pierda entre dos muestreos.
-    """
+    # Sensor de movimiento: salida digital con antirrebote por tiempo.
+    #
+    #     El HC-SR501 entrega 1 mientras detecta movimiento y lo mantiene un rato
+    #     (se ajusta con el potenciometro del modulo, 5 s por defecto en Wokwi). Aca
+    #     se agrega un tiempo de mantenimiento propio para que un pulso corto no se
+    #     pierda entre dos muestreos.
 
     def __init__(self, pin, mantenimiento_ms=1500):
         self._pin = hal.entrada(pin)
@@ -104,11 +100,10 @@ class PirSensor:
         self._ultimo_ms = None
 
     def leer(self):
-        """True si hay movimiento ahora o lo hubo hace menos de 1,5 s.
-
-        `ticks_ms()` es un contador que puede dar la vuelta; por eso la resta
-        se hace con `ticks_diff()` y nunca con `-`.
-        """
+        # True si hay movimiento ahora o lo hubo hace menos de 1,5 s.
+        #
+        #         `ticks_ms()` es un contador que puede dar la vuelta; por eso la resta
+        #         se hace con `ticks_diff()` y nunca con `-`.
         ahora = time.ticks_ms()
         if self._pin.value():
             self._ultimo_ms = ahora
@@ -120,12 +115,11 @@ class PirSensor:
 
 
 class UltrasonicSensor:
-    """HC-SR04: mide distancia en cm con mediana de tres disparos.
-
-    Protocolo: un pulso de 10 us en TRIG dispara la medicion y el sensor
-    responde con un pulso en ECHO cuyo ancho es proporcional a la distancia
-    (58 us por cm, ida y vuelta). Rango util: 2 a 400 cm.
-    """
+    # HC-SR04: mide distancia en cm con mediana de tres disparos.
+    #
+    #     Protocolo: un pulso de 10 us en TRIG dispara la medicion y el sensor
+    #     responde con un pulso en ECHO cuyo ancho es proporcional a la distancia
+    #     (58 us por cm, ida y vuelta). Rango util: 2 a 400 cm.
 
     def __init__(self, pin_trig, pin_echo, min_cm=2.0, max_cm=400.0,
                  timeout_us=30000, muestras=3):
@@ -138,7 +132,7 @@ class UltrasonicSensor:
         self._trig.off()
 
     def _disparo(self):
-        """Un disparo: devuelve cm o None si no hubo eco valido."""
+        # Un disparo: devuelve cm o None si no hubo eco valido.
         self._trig.off()
         time.sleep_us(5)
         self._trig.on()
@@ -157,7 +151,7 @@ class UltrasonicSensor:
         return distancia
 
     def leer(self):
-        """Mediana de tres disparos; error si ninguno fue valido."""
+        # Mediana de tres disparos; error si ninguno fue valido.
         validas = []
         for _ in range(self._muestras):
             d = self._disparo()
@@ -170,20 +164,19 @@ class UltrasonicSensor:
 
 
 class LightSensor:
-    """LDR con salida analogica: convierte el ADC a lux.
-
-    Modelo del modulo (resistencia fija de 10 kOhm arriba, LDR a tierra):
-        V = raw / max_raw * VCC                  tension en el punto medio
-        R_LDR = serie * V / (VCC - V)            divisor de tension despejado
-        lux = (RL10 * 10^gamma / R_LDR) ^ (1 / gamma)
-
-    Con mucha luz el LDR baja su resistencia, la tension de AO baja y el valor
-    del ADC disminuye; en oscuridad el ADC sube y los lux tienden a cero.
-
-    Constantes del modelo (del datasheet tipico del LDR GL5528):
-        RL10 = 50 kOhm a 10 lux   -> `rl10_kohm`
-        gamma = 0.7               -> pendiente de la curva R vs lux
-    """
+    # LDR con salida analogica: convierte el ADC a lux.
+    #
+    #     Modelo del modulo (resistencia fija de 10 kOhm arriba, LDR a tierra):
+    #         V = raw / max_raw * VCC                  tension en el punto medio
+    #         R_LDR = serie * V / (VCC - V)            divisor de tension despejado
+    #         lux = (RL10 * 10^gamma / R_LDR) ^ (1 / gamma)
+    #
+    #     Con mucha luz el LDR baja su resistencia, la tension de AO baja y el valor
+    #     del ADC disminuye; en oscuridad el ADC sube y los lux tienden a cero.
+    #
+    #     Constantes del modelo (del datasheet tipico del LDR GL5528):
+    #         RL10 = 50 kOhm a 10 lux   -> `rl10_kohm`
+    #         gamma = 0.7               -> pendiente de la curva R vs lux
 
     def __init__(self, pin, vcc=3.3, rl10_kohm=50.0, gamma=0.7,
                  serie_ohm=10000.0):
@@ -194,7 +187,7 @@ class LightSensor:
         self._serie = serie_ohm
 
     def leer(self):
-        """Lee el ADC y devuelve lux (0..100000)."""
+        # Lee el ADC y devuelve lux (0..100000).
         max_raw = self._adc.max_raw()
         if not max_raw:
             max_raw = 4095
@@ -222,12 +215,12 @@ class LightSensor:
         return round(lux, 1)
 
     def _tope(self):
-        """Valor maximo que se informa (evita infinitos por division por 0)."""
+        # Valor maximo que se informa (evita infinitos por division por 0).
         return 100000.0
 
 
 class SensorSuite:
-    """Agrupa los sensores y respeta sus periodos de muestreo."""
+    # Agrupa los sensores y respeta sus periodos de muestreo.
 
     def __init__(self, sensores, reloj=None):
         # sensores: lista de tuplas (nombre, objeto_sensor, periodo_s)
@@ -246,7 +239,7 @@ class SensorSuite:
         return [n for n, _, _ in self._sensores]
 
     def actualizar(self, ahora=None):
-        """Lee los sensores cuyo periodo vencio. Devuelve las lecturas nuevas."""
+        # Lee los sensores cuyo periodo vencio. Devuelve las lecturas nuevas.
         if ahora is None:
             ahora = self._reloj()
         nuevas = {}
@@ -271,11 +264,11 @@ class SensorSuite:
         return nuevas
 
     def instantanea(self):
-        """Copia de la ultima lectura de cada sensor (para OLED y MQTT)."""
+        # Copia de la ultima lectura de cada sensor (para OLED y MQTT).
         return dict(self.lecturas)
 
     def total_errores(self):
-        """Suma de errores de todos los sensores (va en la telemetria)."""
+        # Suma de errores de todos los sensores (va en la telemetria).
         total = 0
         for _, valor in self.errores.items():
             total += valor
@@ -283,7 +276,7 @@ class SensorSuite:
 
 
 def construir_desde_config(cfg):
-    """Crea la suite con los sensores del proyecto."""
+    # Crea la suite con los sensores del proyecto.
     sensores = [
         ("clima", DhtSensor(cfg.PIN_DHT, retries=cfg.DHT_RETRIES,
                             retry_delay_ms=cfg.DHT_RETRY_DELAY_MS),
